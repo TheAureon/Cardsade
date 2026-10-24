@@ -14,6 +14,7 @@
   --purple: #a26bf0;
   --gray: #8a97a0;
   --radius: 12px;
+  --display: 'Cinzel', 'Trajan Pro', Georgia, serif;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -42,6 +43,18 @@ button {
 }
 button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.16);
+}
+button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 button:active:not(:disabled) {
   transform: translateY(1px);
@@ -88,9 +101,12 @@ button.big {
 .setup {
   max-width: 640px;
   margin: 0 auto;
-  padding: 32px 16px 64px;
+  padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 .setup h1 {
+  font-family: var(--display);
   font-size: clamp(2.6rem, 9vw, 4rem);
   margin: 0 0 24px;
   text-align: center;
@@ -177,7 +193,9 @@ button.big {
     'table log'
     'me log';
   gap: 12px;
-  padding: 12px;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
   min-height: 100vh;
   max-width: 1400px;
   margin: 0 auto;
@@ -189,6 +207,7 @@ button.big {
   gap: 12px;
 }
 .brand {
+  font-family: var(--display);
   font-weight: 800;
   color: var(--gold);
   font-size: 1.3rem;
@@ -564,6 +583,7 @@ button.big {
 }
 .modal h2 {
   margin: 0;
+  font-family: var(--display);
 }
 .modal .hand {
   justify-content: center;
@@ -573,7 +593,7 @@ button.big {
   .game {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: 'top' 'opps' 'table' 'me' 'log';
-    padding: 10px 16px;
+    padding-block: 10px;
   }
   .log {
     position: static;
