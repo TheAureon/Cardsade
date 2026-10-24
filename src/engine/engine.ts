@@ -85,6 +85,7 @@ export function getPlayerView(state: GameState, viewer: PlayerId): PlayerView {
     hand: me.hand.slice(),
     deckCount: state.deck.length,
     discardTop: state.discard[state.discard.length - 1] ?? null,
+    discardRecent: state.discard.slice(-4),
     discardCount: state.discard.length,
     turn: { ...state.turn },
     stack: state.stack.map((p) => ({ ...p, cards: p.cards.slice() })),

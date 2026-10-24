@@ -1,9 +1,18 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { CARD_INFO } from '../engine/cards';
 import { createGame, type SeatSetup } from '../engine/engine';
-import type { CardKind } from '../engine/types';
+import type { Card, CardKind } from '../engine/types';
+import { CardView } from './CardView';
 import { GameHost, type GameClient } from '../host/GameHost';
 import { GameScreen } from './GameScreen';
+
+const HERO_CARDS: Card[] = [
+  { id: 'h1', kind: 'reverse', value: 0 },
+  { id: 'h2', kind: 'number', value: 7 },
+  { id: 'h3', kind: 'multiplier', value: 3 },
+  { id: 'h4', kind: 'number', value: 4 },
+  { id: 'h5', kind: 'block', value: 0 },
+];
 
 const BOT_NAMES = ['Sir Clank', 'Lady Vex', 'Brother Mox', 'The Pale Knight', 'Grizzlewick'];
 
@@ -38,14 +47,20 @@ export function App() {
 
 function Setup({ settings, onChange, onStart }: { settings: Settings; onChange: (s: Settings) => void; onStart: () => void }) {
   return (
-    <div className="setup">
-      <h1>
-        Cardsade<small>Card + Crusade</small>
-      </h1>
-      <div className="panel">
+    <div className="arena setup">
+      <div className="hero">
+        <div className="hero-fan" aria-hidden="true">
+          {HERO_CARDS.map((c, i) => (
+            <CardView key={c.id} card={c} width={92} disabled style={{ '--i': i } as CSSProperties} />
+          ))}
+        </div>
+        <h1 className="logo">Cardsade</h1>
+        <p className="tagline">Card + Crusade</p>
+      </div>
+      <div className="comic-panel setup-panel">
         <label>
           Your name
-          <input value={settings.name} maxLength={20} onChange={(e) => onChange({ ...settings, name: e.target.value })} />
+          <input id="player-name" value={settings.name} maxLength={20} onChange={(e) => onChange({ ...settings, name: e.target.value })} />
         </label>
         <div className="field">
           <span>Opponents</span>
@@ -77,12 +92,12 @@ function Setup({ settings, onChange, onStart }: { settings: Settings; onChange: 
             ))}
           </div>
         </div>
-        <button type="button" className="primary big" onClick={onStart}>
+        <button type="button" className="btn primary big" onClick={onStart}>
           Begin the crusade
         </button>
       </div>
 
-      <details className="panel rules">
+      <details className="comic-panel rules">
         <summary>How to play</summary>
         <ul>
           <li>Everyone starts with 100 HP and 7 cards. The last player standing wins.</li>

@@ -12,12 +12,12 @@ const asset = (re) => {
 };
 const js = asset(/<script[^>]*src="\.?\/?([^"]+\.js)"/).replace(/<\/script/gi, '<\\/script');
 const css = asset(/<link[^>]*href="\.?\/?([^"]+\.css)"/);
+// Carry over the Google Fonts tags from index.html as they are.
+const fontLinks = (html.match(/<link[^>]*fonts\.(googleapis|gstatic)\.com[^>]*>/g) ?? []).join('\n');
 
 const out = `<title>Cardsade</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap">
+${fontLinks}
 <style>
 ${css}
 </style>

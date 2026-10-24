@@ -125,6 +125,8 @@ export interface PlayerView {
   hand: Card[];
   deckCount: number;
   discardTop: Card | null;
+  /** The last few discarded cards, oldest first, for drawing the pile. */
+  discardRecent: Card[];
   discardCount: number;
   turn: TurnState;
   stack: Packet[];
