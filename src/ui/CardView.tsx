@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, PointerEvent } from 'react';
 import { CARD_INFO } from '../engine/cards';
 import type { Card } from '../engine/types';
 
@@ -11,6 +11,25 @@ interface Props {
   width?: number;
   onClick?: () => void;
   style?: CSSProperties;
+  className?: string;
+}
+
+/** Tilt and glare follow the pointer: a flat card that reads as if it were picked up. */
+function tilt(e: PointerEvent<HTMLButtonElement>) {
+  if (e.pointerType !== 'mouse' || e.currentTarget.disabled) return;
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width - 0.5;
+  const y = (e.clientY - r.top) / r.height - 0.5;
+  el.style.setProperty('--skx', `${(-x * 7).toFixed(2)}deg`);
+  el.style.setProperty('--sky', `${(y * 4).toFixed(2)}deg`);
+  el.style.setProperty('--gx', `${((x + 0.5) * 100).toFixed(0)}%`);
+  el.style.setProperty('--gy', `${((y + 0.5) * 100).toFixed(0)}%`);
+}
+
+function untilt(e: PointerEvent<HTMLButtonElement>) {
+  const el = e.currentTarget;
+  ['--skx', '--sky', '--gx', '--gy'].forEach((v) => el.style.removeProperty(v));
 }
 
 const GLYPHS: Partial<Record<Card['kind'], string>> = {
@@ -35,7 +54,7 @@ function tint(card: Card): string {
   return card.value <= 3 ? 'num-green' : card.value <= 6 ? 'num-blue' : 'num-yellow';
 }
 
-export function CardView({ card, selected, disabled, dim, width, onClick, style }: Props) {
+export function CardView({ card, selected, disabled, dim, width, onClick, style, className }: Props) {
   const info = CARD_INFO[card.kind];
   const isNum = card.kind === 'number';
   const isMult = card.kind === 'multiplier';
@@ -44,9 +63,11 @@ export function CardView({ card, selected, disabled, dim, width, onClick, style 
   return (
     <button
       type="button"
-      className={`card t-${tint(card)}${selected ? ' selected' : ''}${dim ? ' dim' : ''}`}
+      className={`card t-${tint(card)}${selected ? ' selected' : ''}${dim ? ' dim' : ''}${className ? ` ${className}` : ''}`}
       disabled={disabled}
       onClick={onClick}
+      onPointerMove={tilt}
+      onPointerLeave={untilt}
       style={{ ...(width ? ({ '--cw': `${width}px` } as CSSProperties) : null), ...style }}
       title={`${info.name}: ${info.description}${flags ? ` (${flags})` : ''}`}
       aria-label={isNum ? `Number ${card.value}` : isMult ? `Multiplier ×${card.value}` : info.name}

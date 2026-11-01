@@ -1,12 +1,35 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { CARD_INFO, cardLabel, INITIATOR_KINDS } from '../engine/cards';
 import { describePacket, packetDamage } from '../engine/engine';
-import type { Action, Card, Packet, PlayerId, PlayerView, PublicPlayer } from '../engine/types';
+import type { Action, Card, FxEvent, Packet, PlayerId, PlayerView, PublicPlayer } from '../engine/types';
 import type { GameClient } from '../host/GameHost';
 import { Avatar } from './Avatar';
 import { CardBack, CardView, sortHand } from './CardView';
+import { burstPieces, FxLayer, makeConfetti, PALETTES, useFx, type StampVariant } from './Fx';
+import { isMuted, setMuted, sfx, unlockAudio } from './sound';
 
 type NameOf = (id: PlayerId) => string;
+
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+/** Center of an element in viewport coordinates, or the screen center if it isn't on screen. */
+function pointOf(selector: string) {
+  const el = document.querySelector(selector);
+  if (!el) return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+const seatSelector = (id: PlayerId) => `[data-seat="${CSS.escape(id)}"]`;
+const seatPoint = (id: PlayerId) => pointOf(seatSelector(id));
 
 export function GameScreen({ client, onExit }: { client: GameClient; onExit: () => void }) {
   const view = useSyncExternalStore(client.subscribe, client.getView);
@@ -22,6 +45,11 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
   const [target, setTarget] = useState<PlayerId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  const [muted, setMutedState] = useState(isMuted());
+
+  const arenaRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const fx = useFx();
 
   // Clear the selection whenever the decision we're making changes.
   const decisionKey = `${pending.kind}:${'player' in pending ? pending.player : ''}:${view.stack.length}:${view.turn.number}`;
@@ -40,11 +68,17 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
   const send = (action: Action) => {
     const r = client.send(action);
     setError(r.ok ? null : r.error);
+    if (!r.ok) sfx.deselect();
   };
 
   const hand = useMemo(() => sortHand(view.hand), [view.hand]);
   const selectedCards = hand.filter((c) => selected.includes(c.id));
-  const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const toggle = (id: string) => {
+    const on = selected.includes(id);
+    if (on) sfx.deselect();
+    else sfx.select(selected.length);
+    setSelected((s) => (on ? s.filter((x) => x !== id) : [...s, id]));
+  };
 
   const selectable = (c: Card): boolean => {
     if (!myTurnToAct) return false;
@@ -53,16 +87,194 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
     return false;
   };
 
+  // Cards that just arrived in the hand get a deal-in animation.
+  const known = useRef<Set<string> | null>(null);
+  const fresh = useMemo(() => {
+    const prev = known.current;
+    known.current = new Set(view.hand.map((c) => c.id));
+    return prev ? new Set(view.hand.filter((c) => !prev.has(c.id)).map((c) => c.id)) : new Set<string>();
+  }, [view.hand]);
+
+  // ---------- Juice: turn engine events into effects ----------
+  const shake = useCallback((amp: number) => {
+    if (reducedMotion() || !boardRef.current) return;
+    const a = Math.min(amp, 22);
+    boardRef.current.animate(
+      [
+        { translate: '0 0' },
+        { translate: `${a}px ${-a * 0.5}px`, rotate: `${a * 0.04}deg` },
+        { translate: `${-a * 0.8}px ${a * 0.4}px`, rotate: `${-a * 0.03}deg` },
+        { translate: `${a * 0.5}px ${a * 0.3}px` },
+        { translate: `${-a * 0.25}px ${-a * 0.15}px` },
+        { translate: '0 0', rotate: '0deg' },
+      ],
+      { duration: 380 + a * 10, easing: 'ease-out' },
+    );
+  }, []);
+
+  const jolt = useCallback((id: PlayerId) => {
+    if (reducedMotion()) return;
+    document.querySelector(seatSelector(id))?.animate(
+      [{ translate: '0 0' }, { translate: '-7px 2px' }, { translate: '6px -2px' }, { translate: '-4px 0' }, { translate: '0 0' }],
+      { duration: 320, easing: 'ease-out' },
+    );
+  }, []);
+
+  const playFx = useCallback(
+    (e: FxEvent, d: number) => {
+      const { add, later } = fx;
+      const reduced = reducedMotion();
+      const stamp = (id: PlayerId, text: string, variant: StampVariant, big = false) => {
+        const p = seatPoint(id);
+        const x = Math.min(Math.max(p.x, 110), window.innerWidth - 110);
+        add({ kind: 'stamp', x, y: p.y - 30, text, variant, big }, big ? 1400 : 1000, d);
+      };
+      const fly = (from: PlayerId | 'deck', to: PlayerId, variant: 'attack' | 'reverse' | 'action' | 'skip' | 'draw', label?: string, delay = d) => {
+        if (reduced) return;
+        const a = from === 'deck' ? pointOf('[data-pile="deck"]') : seatPoint(from);
+        const b = seatPoint(to);
+        add({ kind: 'projectile', x1: a.x, y1: a.y, x2: b.x, y2: b.y, variant, label }, 560, delay);
+      };
+      const burst = (id: PlayerId, count: number, spread: number, palette: string[], delay = d) => {
+        const p = seatPoint(id);
+        add({ kind: 'particles', x: p.x, y: p.y, pieces: burstPieces(reduced ? 0 : count, spread, palette) }, 900, delay);
+      };
+      const incoming = (delay: number) => {
+        add({ kind: 'banner', text: 'INCOMING!', variant: 'incoming' }, 1000, delay);
+        later(sfx.incoming, delay);
+      };
+
+      switch (e.type) {
+        case 'turn':
+          if (e.who === me) {
+            add({ kind: 'banner', text: 'YOUR TURN!', variant: 'turn' }, 1250, d + 150);
+            later(sfx.yourTurn, d + 150);
+          }
+          break;
+        case 'attack':
+          fly(e.from, e.to, 'attack', String(e.amount));
+          later(sfx.whoosh, d);
+          if (e.to === me) incoming(d + 380);
+          break;
+        case 'action':
+          fly(e.from, e.to, 'action', CARD_INFO[e.card].symbol);
+          later(sfx.zap, d);
+          if (e.to === me) incoming(d + 380);
+          break;
+        case 'reverse':
+          stamp(e.from, 'REVERSE!', 'reverse');
+          fly(e.from, e.to, 'reverse', e.amount === null ? '⇄' : String(e.amount), d + 120);
+          later(sfx.reverse, d);
+          if (e.to === me) incoming(d + 480);
+          break;
+        case 'block':
+          stamp(e.by, 'BLOCKED!', 'block');
+          burst(e.by, 18, 90, PALETTES.block);
+          later(() => jolt(e.by), d);
+          later(sfx.block, d);
+          break;
+        case 'skipCounter':
+          stamp(e.from, 'SKIP!', 'skip');
+          fly(e.from, e.to, 'skip', '⦸', d + 100);
+          later(sfx.skip, d);
+          if (e.to === me) incoming(d + 460);
+          break;
+        case 'cancelled':
+          stamp(e.who, 'CANCELLED!', 'skip');
+          later(sfx.skip, d);
+          break;
+        case 'skipped':
+          stamp(e.who, 'SKIPPED!', 'skip');
+          burst(e.who, 10, 70, PALETTES.hit);
+          later(sfx.skip, d);
+          break;
+        case 'wasted':
+          stamp(e.who, 'WASTED!', 'skip');
+          later(sfx.deselect, d);
+          break;
+        case 'damage': {
+          const p = seatPoint(e.to);
+          burst(e.to, 14 + Math.min(e.amount, 40), 70 + Math.min(e.amount, 60) * 1.6, PALETTES.hit);
+          add({ kind: 'float', x: p.x, y: p.y - 20, text: `-${e.amount}`, variant: 'damage' }, 1100, d);
+          if (e.amount >= 25) stamp(e.to, e.amount >= 50 ? 'DEVASTATING!' : 'CRITICAL!', 'hit');
+          later(() => {
+            shake((3 + e.amount / 3) * (e.to === me ? 1.3 : 0.6));
+            jolt(e.to);
+          }, d);
+          if (e.to === me) add({ kind: 'flash' }, 450, d);
+          later(() => sfx.hit(e.amount), d);
+          break;
+        }
+        case 'discard': {
+          const p = seatPoint(e.who);
+          burst(e.who, 16, 80, PALETTES.magic);
+          add({ kind: 'float', x: p.x, y: p.y - 20, text: `-${e.count} card${e.count === 1 ? '' : 's'}`, variant: 'info' }, 1100, d);
+          later(sfx.zap, d);
+          break;
+        }
+        case 'draw':
+          for (let k = 0; k < Math.min(e.count, 3); k++) fly('deck', e.who, 'draw', undefined, d + k * 110);
+          later(sfx.draw, d);
+          break;
+        case 'ko':
+          stamp(e.who, 'K.O.!', 'ko', true);
+          burst(e.who, 46, 170, PALETTES.party);
+          later(() => shake(22), d);
+          later(sfx.ko, d);
+          break;
+        case 'win':
+          if (e.who === me) {
+            if (!reduced) add(makeConfetti(), 4200, d + 200);
+            later(sfx.win, d + 200);
+          } else {
+            later(sfx.lose, d + 200);
+          }
+          break;
+      }
+    },
+    [fx, me, shake, jolt],
+  );
+
+  const lastLog = useRef(0);
+  useEffect(() => {
+    const entries = view.log.filter((e) => e.id > lastLog.current && e.fx);
+    if (view.log.length) lastLog.current = view.log[view.log.length - 1].id;
+    entries.forEach((e, i) => playFx(e.fx!, i * 160));
+  }, [view.log, playFx]);
+
+  // ---------- Parallax: layers drift with the mouse to sell depth ----------
+  const onPointerMove = (e: ReactPointerEvent) => {
+    if (e.pointerType !== 'mouse' || !arenaRef.current || reducedMotion()) return;
+    const x = (e.clientX / window.innerWidth - 0.5) * 2;
+    const y = (e.clientY / window.innerHeight - 0.5) * 2;
+    arenaRef.current.style.setProperty('--px', x.toFixed(3));
+    arenaRef.current.style.setProperty('--py', y.toFixed(3));
+  };
+
   const latest = view.log[view.log.length - 1];
+  const canDraw = myTurnToAct && (pending.kind === 'main' || pending.kind === 'post');
 
   return (
-    <div className="arena">
+    <div className="arena game" ref={arenaRef} onPointerMove={onPointerMove} onPointerDown={unlockAudio}>
       <header className="hud">
         <span className="logo small">Cardsade</span>
-        <span className={`turn-ribbon${view.turn.player === me ? ' mine' : ''}`}>
+        <span className={`turn-ribbon${view.turn.player === me ? ' mine' : ''}`} key={view.turn.number}>
           Turn {view.turn.number} · {view.turn.player === me ? 'Your turn!' : `${nameOf(view.turn.player)}'s turn`}
         </span>
         <span className="hud-actions">
+          <button
+            type="button"
+            className="btn ghost"
+            aria-pressed={!muted}
+            onClick={() => {
+              setMuted(!muted);
+              setMutedState(!muted);
+              unlockAudio();
+              if (muted) sfx.click();
+            }}
+          >
+            {muted ? 'Sound off' : 'Sound on'}
+          </button>
           <button type="button" className="btn ghost" onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen}>
             Log
           </button>
@@ -78,91 +290,127 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
         </div>
       )}
 
-      <section className="opponents" style={{ '--n': opponents.length } as CSSProperties}>
-        {opponents.map((p, i) => {
-          const x = opponents.length === 1 ? 0 : (2 * i) / (opponents.length - 1) - 1;
-          return (
-            <Seat
-              key={p.id}
-              player={p}
-              seed={seatIndex(p.id)}
-              view={view}
-              arc={x * x}
-              isTarget={target === p.id}
-              targetable={myTurnToAct && pending.kind === 'main' && !p.eliminated}
-              onClick={() => setTarget(p.id)}
-            />
-          );
-        })}
-      </section>
-
-      <section className="center">
-        <Swirl />
-        <div className="piles">
-          <div className="deck" title={`${view.deckCount} cards left in the deck`}>
-            {view.deckCount > 0 ? <CardBack width={74} /> : <span className="slot" />}
-            <span className="pile-count">{view.deckCount}</span>
+      <div className="board" ref={boardRef}>
+        <section className="stage" style={{ '--n': view.players.length } as CSSProperties}>
+          <div className="table">
+            <div className="table-felt" />
+            <Swirl />
           </div>
-          <div className="discard" title={`${view.discardCount} cards in the discard pile`}>
-            {view.discardRecent.length === 0 && <span className="slot" />}
-            {view.discardRecent.map((c, i) => (
-              <CardView key={c.id} card={c} width={80} disabled style={SCATTER[(parseInt(c.id.replace(/\D/g, ""), 10) || i) % SCATTER.length]} />
+
+          {opponents.map((p, i) => {
+            // Everyone sits evenly around the oval, you at the front; turn order runs clockwise.
+            const angle = 90 + ((i + 1) * 360) / view.players.length;
+            return (
+              <Seat
+                key={p.id}
+                player={p}
+                seed={seatIndex(p.id)}
+                view={view}
+                angle={angle}
+                index={i}
+                isTarget={target === p.id}
+                targetable={myTurnToAct && pending.kind === 'main' && !p.eliminated}
+                onClick={() => {
+                  setTarget(p.id);
+                  sfx.click();
+                }}
+              />
+            );
+          })}
+
+          <div className="piles">
+            <button
+              type="button"
+              className={`deck${canDraw ? ' can-draw' : ''}`}
+              data-pile="deck"
+              disabled={!canDraw}
+              onClick={() => send({ type: 'draw', player: me })}
+              title={canDraw ? `Draw ${view.config.drawCount} and end your turn` : `${view.deckCount} cards left`}
+              aria-label={canDraw ? `Draw ${view.config.drawCount} cards and end your turn` : `${view.deckCount} cards left in the deck`}
+            >
+              {view.deckCount === 0 && <span className="slot" />}
+              {Array.from({ length: Math.min(5, Math.ceil(view.deckCount / 10)) }, (_, k) => (
+                <span key={k} className="deck-layer" style={{ '--k': k } as CSSProperties}>
+                  <CardBack width={70} />
+                </span>
+              ))}
+              <span className="pile-count">{view.deckCount}</span>
+            </button>
+            <div className="discard" title={`${view.discardCount} cards in the discard pile`}>
+              {view.discardRecent.length === 0 && <span className="slot" />}
+              {view.discardRecent.map((c, i) => (
+                <CardView
+                  key={c.id}
+                  card={c}
+                  width={72}
+                  disabled
+                  className={i === view.discardRecent.length - 1 ? 'landed' : ''}
+                  style={{ '--toss': `${SCATTER[(parseInt(c.id.replace(/\D/g, ''), 10) || i) % SCATTER.length]}deg` } as CSSProperties}
+                />
+              ))}
+            </div>
+          </div>
+
+          {view.stack.length > 0 && <Chain view={view} nameOf={nameOf} />}
+        </section>
+
+        <div className="caption" role="status">
+          {error ? <span className="error">{error}</span> : promptText(view, nameOf, target)}
+        </div>
+
+        <section className="player">
+          <div className="me">
+            <div className={`portrait-wrap${view.turn.player === me ? ' active' : ''}`} data-seat={me}>
+              <Avatar seed={seatIndex(me)} />
+              <HitBurst hp={self.hp} />
+              <span className="count-badge">{view.hand.length}</span>
+              {myTurnToAct && <span className="splat">!</span>}
+            </div>
+            <div className="me-info">
+              <span className="nameplate">{self.name}</span>
+              <HpBar hp={self.hp} max={view.config.startingHp} />
+              <span className="badges">
+                {self.skipped && <span className="badge skipped">Skipped</span>}
+                {self.eliminated && <span className="badge out">K.O.</span>}
+              </span>
+            </div>
+            <div className="controls">
+              {myTurnToAct && (
+                <Controls view={view} selectedCards={selectedCards} target={target} nameOf={nameOf} send={send} />
+              )}
+              {self.eliminated && pending.kind !== 'gameOver' && (
+                <>
+                  <span className="muted">You're out. Watching the rest of the crusade…</span>
+                  <button type="button" className="btn" onClick={onExit}>
+                    New game
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="hand" style={{ '--n': Math.max(hand.length, 1) } as CSSProperties}>
+            {hand.length === 0 && !self.eliminated && <span className="muted">No cards in hand</span>}
+            {hand.map((c, i) => (
+              <div
+                key={c.id}
+                className={`hand-slot${fresh.has(c.id) ? ' fresh' : ''}`}
+                style={{ '--i': i, '--deal': `${(i % 4) * 70}ms` } as CSSProperties}
+              >
+                <CardView
+                  card={c}
+                  selected={selected.includes(c.id)}
+                  disabled={!selectable(c)}
+                  dim={myTurnToAct && !selectable(c)}
+                  onClick={() => toggle(c.id)}
+                />
+              </div>
             ))}
           </div>
-        </div>
-        {view.stack.length > 0 && <Chain view={view} nameOf={nameOf} />}
-      </section>
-
-      <div className="caption" role="status">
-        {error ? <span className="error">{error}</span> : promptText(view, nameOf, target)}
+        </section>
       </div>
 
-      <section className="player">
-        <div className="me">
-          <div className={`portrait-wrap${view.turn.player === me ? ' active' : ''}`}>
-            <Avatar seed={seatIndex(me)} />
-            <HitBurst hp={self.hp} />
-            <span className="count-badge">{view.hand.length}</span>
-            {myTurnToAct && <span className="splat">!</span>}
-          </div>
-          <div className="me-info">
-            <span className="nameplate">{self.name}</span>
-            <HpBar hp={self.hp} max={view.config.startingHp} />
-            <span className="badges">
-              {self.skipped && <span className="badge skipped">Skipped</span>}
-              {self.eliminated && <span className="badge out">K.O.</span>}
-            </span>
-          </div>
-          <div className="controls">
-            {myTurnToAct && (
-              <Controls view={view} selectedCards={selectedCards} target={target} nameOf={nameOf} send={send} />
-            )}
-            {self.eliminated && pending.kind !== 'gameOver' && (
-              <>
-                <span className="muted">You're out. Watching the rest of the crusade…</span>
-                <button type="button" className="btn" onClick={onExit}>
-                  New game
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="hand" style={{ '--n': Math.max(hand.length, 1) } as CSSProperties}>
-          {hand.length === 0 && !self.eliminated && <span className="muted">No cards in hand</span>}
-          {hand.map((c, i) => (
-            <div key={c.id} className="hand-slot" style={{ '--i': i } as CSSProperties}>
-              <CardView
-                card={c}
-                selected={selected.includes(c.id)}
-                disabled={!selectable(c)}
-                dim={myTurnToAct && !selectable(c)}
-                onClick={() => toggle(c.id)}
-              />
-            </div>
-          ))}
-        </div>
-      </section>
+      <FxLayer items={fx.items} />
 
       {logOpen && (
         <aside className="log-drawer">
@@ -199,7 +447,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
       )}
 
       {pending.kind === 'gameOver' && (
-        <div className="overlay">
+        <div className={`overlay${pending.winner === me ? ' won' : ' lost'}`}>
           <div className="comic-panel">
             <h2 className="big">{pending.winner === me ? 'Victory!' : `${nameOf(pending.winner)} wins!`}</h2>
             <p>{pending.winner === me ? 'Your crusade is complete.' : 'Your crusade ends here.'}</p>
@@ -213,55 +461,67 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
   );
 }
 
-const SCATTER: CSSProperties[] = [
-  { transform: 'translate(-10px, 4px) rotate(-16deg)' },
-  { transform: 'translate(8px, -6px) rotate(9deg)' },
-  { transform: 'translate(-4px, -2px) rotate(-5deg)' },
-  { transform: 'translate(6px, 6px) rotate(14deg)' },
-  { transform: 'translate(0px, -8px) rotate(-11deg)' },
-];
+const SCATTER = [-16, 9, -5, 14, -11];
 
 function Seat(props: {
   player: PublicPlayer;
   seed: number;
   view: PlayerView;
-  arc: number;
+  angle: number;
+  index: number;
   isTarget: boolean;
   targetable: boolean;
   onClick: () => void;
 }) {
-  const { player, seed, view, arc, isTarget, targetable, onClick } = props;
+  const { player, seed, view, angle, index, isTarget, targetable, onClick } = props;
   const active = view.turn.player === player.id;
   const deciding = view.pending.kind !== 'gameOver' && view.pending.player === player.id;
   const fan = Math.min(player.handCount, 9);
+  const rad = (angle * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  // 0 at the far side of the table, 1 at the near side: nearer seats are bigger and drift more.
+  const depth = (sin + 1) / 2;
+  const geo = {
+    '--cos': cos.toFixed(3),
+    '--sin': sin.toFixed(3),
+    '--depth': depth.toFixed(3),
+    '--face': `${(angle - 90).toFixed(1)}deg`,
+    zIndex: 10 + Math.round(depth * 10),
+  } as CSSProperties;
   return (
-    <button
-      type="button"
-      className={`seat${isTarget ? ' targeted' : ''}${player.eliminated ? ' out' : ''}`}
-      style={{ '--arc': arc } as CSSProperties}
-      disabled={!targetable}
-      onClick={onClick}
-      aria-label={`${player.name}, ${player.hp} HP, ${player.handCount} cards${isTarget ? ', targeted' : ''}`}
-    >
-      <span className="nameplate">{player.name}</span>
-      <span className={`portrait-wrap${active ? ' active' : ''}`}>
-        <Avatar seed={seed} />
-        <HitBurst hp={player.hp} />
-        <span className="count-badge">{player.handCount}</span>
-        {deciding && <span className="splat">!</span>}
-        {isTarget && <span className="crosshair" />}
-      </span>
-      <HpBar hp={player.hp} max={view.config.startingHp} />
-      <span className="badges">
-        {player.skipped && <span className="badge skipped">Skipped</span>}
-        {player.eliminated && <span className="badge out">K.O.</span>}
-      </span>
-      <span className="fan" style={{ '--m': fan } as CSSProperties}>
+    <>
+      <span className="fan" style={{ ...geo, zIndex: 5, '--m': fan } as CSSProperties} aria-hidden="true">
         {Array.from({ length: fan }, (_, j) => (
           <CardBack key={j} style={{ '--j': j } as CSSProperties} />
         ))}
       </span>
-    </button>
+      <button
+        type="button"
+        className={`seat${isTarget ? ' targeted' : ''}${player.eliminated ? ' out' : ''}${active ? ' active' : ''}`}
+        style={geo}
+        disabled={!targetable}
+        onClick={onClick}
+        aria-label={`${player.name}, ${player.hp} HP, ${player.handCount} cards${isTarget ? ', targeted' : ''}`}
+      >
+        <span className="seat-shadow" style={{ animationDelay: `${index * -0.7}s` }} />
+        <span className="seat-body" style={{ animationDelay: `${index * -0.7}s` }}>
+          <span className={`portrait-wrap${active ? ' active' : ''}`} data-seat={player.id}>
+            <Avatar seed={seed} />
+            <HitBurst hp={player.hp} />
+            <span className="count-badge">{player.handCount}</span>
+            {deciding && <span className="splat">!</span>}
+            {isTarget && <span className="crosshair" />}
+          </span>
+          <span className="nameplate">{player.name}</span>
+          <HpBar hp={player.hp} max={view.config.startingHp} />
+          <span className="badges">
+            {player.skipped && <span className="badge skipped">Skipped</span>}
+            {player.eliminated && <span className="badge out">K.O.</span>}
+          </span>
+        </span>
+      </button>
+    </>
   );
 }
 
@@ -281,18 +541,22 @@ function HitBurst({ hp }: { hp: number }) {
   if (!hit) return null;
   const word = hit.ko ? 'K.O.!' : hit.amount >= 30 ? 'KA-BOOM!' : hit.amount >= 10 ? 'POW!' : 'BAM!';
   return (
-    <span className="burst" key={hit.key}>
-      <span>{word}</span>
-      <small>-{hit.amount}</small>
-    </span>
+    <>
+      <span className="hit-flash" key={`f${hit.key}`} />
+      <span className="burst" key={hit.key}>
+        <span>{word}</span>
+      </span>
+    </>
   );
 }
 
+/** HP bar with a trailing "ghost" chunk that drains after the hit, fighting-game style. */
 function HpBar({ hp, max }: { hp: number; max: number }) {
   const pct = Math.max(0, Math.min(100, (hp / max) * 100));
   const level = pct > 50 ? 'high' : pct > 20 ? 'mid' : 'low';
   return (
     <span className="hp" role="meter" aria-valuenow={hp} aria-valuemin={0} aria-valuemax={max} aria-label="Health">
+      <span className="hp-ghost" style={{ width: `${pct}%` }} />
       <span className={`hp-fill ${level}`} style={{ width: `${pct}%` }} />
       <span className="hp-text">{hp} HP</span>
     </span>
@@ -324,7 +588,7 @@ function Chain({ view, nameOf }: { view: PlayerView; nameOf: NameOf }) {
   return (
     <ol className="chain">
       {view.stack.map((p, i) => (
-        <li key={p.id} className={`comic-panel chain-link${i === view.stack.length - 1 ? ' top' : ''}`}>
+        <li key={`${p.id}-${p.from}`} className={`comic-panel chain-link${i === view.stack.length - 1 ? ' top' : ''}`}>
           <div className="chain-who">
             {nameOf(p.from)} <span className="arrow">➜</span> {nameOf(p.to)}
           </div>
@@ -337,7 +601,7 @@ function Chain({ view, nameOf }: { view: PlayerView; nameOf: NameOf }) {
           {p.cards.length > 0 && (
             <div className="chain-cards">
               {p.cards.map((c) => (
-                <CardView key={c.id} card={c} width={38} disabled />
+                <CardView key={c.id} card={c} width={36} disabled />
               ))}
             </div>
           )}
@@ -361,10 +625,10 @@ function promptText(view: PlayerView, nameOf: NameOf, target: PlayerId | null): 
     case 'main':
       if (p.player !== me) return `${nameOf(p.player)} is planning their move…`;
       return target
-        ? `Targeting ${nameOf(target)}. Add number and multiplier cards and attack, or play an action card at them.`
+        ? `Targeting ${nameOf(target)}. Stack number and multiplier cards and attack, or play an action card at them.`
         : 'Tap an opponent to target them.';
     case 'post':
-      return p.player === me ? 'Attack done. Draw cards or end your turn.' : `${nameOf(p.player)} is finishing their turn…`;
+      return p.player === me ? 'Attack done. Tap the deck to draw, or end your turn.' : `${nameOf(p.player)} is finishing their turn…`;
     case 'response': {
       const what = describePacket(view, p.packet);
       if (p.player === me) return `${nameOf(p.packet.from)}'s ${what} is coming at you! Respond or take it.`;
@@ -373,6 +637,14 @@ function promptText(view: PlayerView, nameOf: NameOf, target: PlayerId | null): 
     case 'choose':
       return p.player === me ? '' : `${nameOf(p.player)} is picking a card for ${nameOf(p.target)} to discard…`;
   }
+}
+
+/** How hyped the attack button gets as the damage climbs. */
+function hype(dmg: number): { tier: string; label: string } {
+  if (dmg >= 80) return { tier: 'ultra', label: 'ULTRA COMBO!' };
+  if (dmg >= 40) return { tier: 'mega', label: 'MEGA HIT!' };
+  if (dmg >= 20) return { tier: 'big', label: 'BIG HIT!' };
+  return { tier: '', label: '' };
 }
 
 function Controls(props: {
@@ -386,7 +658,7 @@ function Controls(props: {
   const me = view.viewer;
   const p = view.pending;
   const draw = (
-    <button type="button" className="btn" onClick={() => send({ type: 'draw', player: me })}>
+    <button type="button" className={`btn${p.kind === 'post' ? ' primary pulse' : ''}`} onClick={() => send({ type: 'draw', player: me })}>
       Draw {view.config.drawCount}
     </button>
   );
@@ -403,12 +675,13 @@ function Controls(props: {
     const mult = attackCards.filter((c) => c.kind === 'multiplier').reduce((m, c) => m * c.value, 1);
     const dmg = (view.config.baseDamage + numbers) * mult;
     const t = target ? nameOf(target) : null;
+    const h = hype(dmg);
     return (
       <>
         {actionCards.length === 1 && attackCards.length === 0 ? (
           <button
             type="button"
-            className="btn primary"
+            className="btn primary ready"
             disabled={!target}
             onClick={() => send({ type: 'playAction', player: me, cardId: actionCards[0].id, target: target! })}
           >
@@ -418,11 +691,25 @@ function Controls(props: {
         ) : (
           <button
             type="button"
-            className="btn attack"
+            className={`btn attack${target && actionCards.length === 0 ? ' ready' : ''}${h.tier ? ` hype-${h.tier}` : ''}`}
             disabled={!target || actionCards.length > 0}
             onClick={() => send({ type: 'attack', player: me, target: target!, cardIds: attackCards.map((c) => c.id) })}
           >
-            {actionCards.length > 0 ? 'One action card at a time' : `Attack${t ? ` ${t}` : ''} · ${dmg}`}
+            {actionCards.length > 0 ? (
+              'One action card at a time'
+            ) : (
+              <>
+                {h.label && (
+                  <span className="hype-label" key={h.tier}>
+                    {h.label}
+                  </span>
+                )}
+                Attack{t ? ` ${t}` : ''} ·{' '}
+                <span className="dmg-pop" key={dmg}>
+                  {dmg}
+                </span>
+              </>
+            )}
           </button>
         )}
         {draw}
@@ -456,7 +743,16 @@ function Controls(props: {
           ⛨ Block
         </button>
         <button type="button" className="btn defend" disabled={!reverse} onClick={() => respond(reverse, mults.map((c) => c.id))}>
-          ⇄ Reverse{isAttack && mults.length ? ` · ${boosted}` : ''}
+          ⇄ Reverse
+          {isAttack && mults.length ? (
+            <>
+              {' '}
+              ·{' '}
+              <span className="dmg-pop" key={boosted}>
+                {boosted}
+              </span>
+            </>
+          ) : null}
         </button>
         <button type="button" className="btn defend" disabled={!skip} onClick={() => respond(skip)}>
           ⦸ Skip

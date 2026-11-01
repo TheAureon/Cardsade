@@ -3,6 +3,7 @@ import { CARD_INFO } from '../engine/cards';
 import { createGame, type SeatSetup } from '../engine/engine';
 import type { Card, CardKind } from '../engine/types';
 import { CardView } from './CardView';
+import { unlockAudio } from './sound';
 import { GameHost, type GameClient } from '../host/GameHost';
 import { GameScreen } from './GameScreen';
 
@@ -27,6 +28,7 @@ export function App() {
   const [game, setGame] = useState<{ host: GameHost; client: GameClient } | null>(null);
 
   const start = () => {
+    unlockAudio();
     const seats: SeatSetup[] = [
       { id: 'human', name: settings.name.trim() || 'Crusader', controller: 'human' },
       ...BOT_NAMES.slice(0, settings.opponents).map((name, i) => ({ id: `bot${i + 1}`, name, controller: 'bot' as const })),

@@ -69,10 +69,31 @@ export interface TurnState {
 
 export type LogTone = 'info' | 'attack' | 'damage' | 'defend' | 'action' | 'ko' | 'win';
 
+/**
+ * A machine-readable version of a log line, so clients can animate what
+ * happened (projectiles, stamps, shakes) without parsing text.
+ */
+export type FxEvent =
+  | { type: 'turn'; who: PlayerId }
+  | { type: 'attack'; from: PlayerId; to: PlayerId; amount: number }
+  | { type: 'action'; from: PlayerId; to: PlayerId; card: CardKind }
+  | { type: 'reverse'; from: PlayerId; to: PlayerId; amount: number | null }
+  | { type: 'block'; by: PlayerId; against: PlayerId }
+  | { type: 'skipCounter'; from: PlayerId; to: PlayerId }
+  | { type: 'cancelled'; who: PlayerId }
+  | { type: 'skipped'; who: PlayerId }
+  | { type: 'wasted'; who: PlayerId }
+  | { type: 'damage'; to: PlayerId; amount: number; hp: number }
+  | { type: 'discard'; who: PlayerId; count: number }
+  | { type: 'draw'; who: PlayerId; count: number }
+  | { type: 'ko'; who: PlayerId }
+  | { type: 'win'; who: PlayerId };
+
 export interface LogEntry {
   id: number;
   text: string;
   tone: LogTone;
+  fx?: FxEvent;
 }
 
 export interface GameState {

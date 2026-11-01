@@ -234,6 +234,20 @@ describe('turns and drawing', () => {
   });
 });
 
+describe('fx events', () => {
+  it('records structured events for attacks, reverses and damage', () => {
+    const n4 = card('number', 4), r = card('reverse');
+    let s = setup([[n4], [r]]);
+    s = act(s, { type: 'attack', player: 'p0', target: 'p1', cardIds: [n4.id] });
+    s = act(s, { type: 'respond', player: 'p1', cardId: r.id });
+    s = act(s, { type: 'pass', player: 'p0' });
+    const fx = s.log.map((e) => e.fx).filter(Boolean);
+    expect(fx).toContainEqual({ type: 'attack', from: 'p0', to: 'p1', amount: 5 });
+    expect(fx).toContainEqual({ type: 'reverse', from: 'p1', to: 'p0', amount: 5 });
+    expect(fx).toContainEqual({ type: 'damage', to: 'p0', amount: 5, hp: 95 });
+  });
+});
+
 describe('player view', () => {
   it('hides other hands', () => {
     const s = createGame(seats(3));

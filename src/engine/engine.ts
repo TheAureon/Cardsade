@@ -5,6 +5,7 @@ import type {
   ActionResult,
   Card,
   ControllerKind,
+  FxEvent,
   GameConfig,
   GameState,
   LogTone,
@@ -53,7 +54,7 @@ export function createGame(seats: SeatSetup[], config: Partial<GameConfig> = {})
     nextId: 1,
   };
   for (const p of state.players) drawCards(state, p, cfg.handSize);
-  log(state, `Turn 1: ${seats[0].name}`, 'info');
+  log(state, `Turn 1: ${seats[0].name}`, 'info', { type: 'turn', who: seats[0].id });
   return state;
 }
 
@@ -117,7 +118,12 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       if (consumeSkip(state, player, [card])) break;
       const target = getPlayer(state, action.target);
       pushPacket(state, card.kind as Packet['kind'], player.id, target.id, [card]);
-      log(state, `${player.name} plays ${cardLabel(card)} on ${target.name}`, 'action');
+      log(state, `${player.name} plays ${cardLabel(card)} on ${target.name}`, 'action', {
+        type: 'action',
+        from: player.id,
+        to: target.id,
+        card: card.kind,
+      });
       break;
     }
 
@@ -143,7 +149,12 @@ export function applyAction(input: GameState, action: Action): ActionResult {
         else packet.multiplier *= c.value;
       }
       const extra = cards.length ? ` (${cards.map(cardLabel).join(' ')})` : '';
-      log(state, `${player.name} attacks ${target.name} for ${packetDamage(state, packet)}${extra}`, 'attack');
+      log(state, `${player.name} attacks ${target.name} for ${packetDamage(state, packet)}${extra}`, 'attack', {
+        type: 'attack',
+        from: player.id,
+        to: target.id,
+        amount: packetDamage(state, packet),
+      });
       break;
     }
 
@@ -171,17 +182,30 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       if (card.kind === 'block') {
         state.stack.pop();
         state.discard.push(card, ...packet.cards);
-        log(state, `${player.name} blocks ${from.name}'s ${describePacket(state, packet)}`, 'defend');
+        log(state, `${player.name} blocks ${from.name}'s ${describePacket(state, packet)}`, 'defend', {
+          type: 'block',
+          by: player.id,
+          against: from.id,
+        });
       } else if (card.kind === 'reverse') {
         packet.from = player.id;
         packet.to = from.id;
         packet.cards.push(card, ...mults);
         for (const m of mults) packet.multiplier *= m.value;
         const boost = mults.length ? ` and boosts it with ${mults.map(cardLabel).join(' ')}` : '';
-        log(state, `${player.name} reverses the ${describePacket(state, packet)} back at ${from.name}${boost}`, 'defend');
+        log(state, `${player.name} reverses the ${describePacket(state, packet)} back at ${from.name}${boost}`, 'defend', {
+          type: 'reverse',
+          from: player.id,
+          to: from.id,
+          amount: packet.kind === 'attack' ? packetDamage(state, packet) : null,
+        });
       } else {
         pushPacket(state, 'skip', player.id, from.id, [card]);
-        log(state, `${player.name} answers with Skip against ${from.name}`, 'defend');
+        log(state, `${player.name} answers with Skip against ${from.name}`, 'defend', {
+          type: 'skipCounter',
+          from: player.id,
+          to: from.id,
+        });
       }
       break;
     }
@@ -200,14 +224,22 @@ export function applyAction(input: GameState, action: Action): ActionResult {
       takeCards(target, [card.id]);
       state.discard.push(card);
       state.choice = null;
-      log(state, `${player.name} makes ${target.name} discard ${cardLabel(card)}`, 'action');
+      log(state, `${player.name} makes ${target.name} discard ${cardLabel(card)}`, 'action', {
+        type: 'discard',
+        who: target.id,
+        count: 1,
+      });
       break;
     }
 
     case 'draw': {
       if (pending.kind !== 'main' && pending.kind !== 'post') return fail("You can't draw right now");
       const got = drawCards(state, player, state.config.drawCount);
-      log(state, `${player.name} draws ${got} card${got === 1 ? '' : 's'} and ends their turn`, 'info');
+      log(state, `${player.name} draws ${got} card${got === 1 ? '' : 's'} and ends their turn`, 'info', {
+        type: 'draw',
+        who: player.id,
+        count: got,
+      });
       advanceTurn(state);
       break;
     }
@@ -246,7 +278,7 @@ function consumeSkip(state: GameState, player: PlayerState, cards: Card[]): bool
   player.skipped = false;
   state.discard.push(...cards);
   const what = cards.length ? cards.map(cardLabel).join(' ') : 'attack';
-  log(state, `${player.name} was skipped: their ${what} does nothing`, 'action');
+  log(state, `${player.name} was skipped: their ${what} does nothing`, 'action', { type: 'wasted', who: player.id });
   return true;
 }
 
@@ -272,7 +304,12 @@ function resolveTop(state: GameState) {
     case 'attack': {
       const dmg = packetDamage(state, packet);
       target.hp = Math.max(0, target.hp - dmg);
-      log(state, `${target.name} takes ${dmg} damage (${target.hp} HP left)`, 'damage');
+      log(state, `${target.name} takes ${dmg} damage (${target.hp} HP left)`, 'damage', {
+        type: 'damage',
+        to: target.id,
+        amount: dmg,
+        hp: target.hp,
+      });
       if (target.hp <= 0) eliminate(state, target);
       break;
     }
@@ -282,10 +319,13 @@ function resolveTop(state: GameState) {
         // Played as a response: it cancels the card the target sent.
         state.stack.pop();
         state.discard.push(...below.cards);
-        log(state, `${target.name}'s ${describePacket(state, below)} is skipped and does nothing`, 'defend');
+        log(state, `${target.name}'s ${describePacket(state, below)} is skipped and does nothing`, 'defend', {
+          type: 'cancelled',
+          who: target.id,
+        });
       } else {
         target.skipped = true;
-        log(state, `${target.name} is skipped: their next card will be useless`, 'action');
+        log(state, `${target.name} is skipped: their next card will be useless`, 'action', { type: 'skipped', who: target.id });
       }
       break;
     }
@@ -308,7 +348,11 @@ function resolveTop(state: GameState) {
       const lost = target.hand.filter(matches);
       target.hand = target.hand.filter((c) => !matches(c));
       state.discard.push(...lost);
-      log(state, `${target.name} discards ${lost.length} card${lost.length === 1 ? '' : 's'}`, 'action');
+      log(state, `${target.name} discards ${lost.length} card${lost.length === 1 ? '' : 's'}`, 'action', {
+        type: 'discard',
+        who: target.id,
+        count: lost.length,
+      });
       break;
     }
   }
@@ -319,7 +363,7 @@ function eliminate(state: GameState, player: PlayerState) {
   player.skipped = false;
   state.discard.push(...player.hand);
   player.hand = [];
-  log(state, `${player.name} is knocked out!`, 'ko');
+  log(state, `${player.name} is knocked out!`, 'ko', { type: 'ko', who: player.id });
 }
 
 function drawCards(state: GameState, player: PlayerState, count: number): number {
@@ -344,7 +388,7 @@ function advanceTurn(state: GameState) {
     const next = seats[(start + i) % seats.length];
     if (!next.eliminated) {
       state.turn = { player: next.id, number: state.turn.number + 1, attacked: false };
-      log(state, `Turn ${state.turn.number}: ${next.name}`, 'info');
+      log(state, `Turn ${state.turn.number}: ${next.name}`, 'info', { type: 'turn', who: next.id });
       return;
     }
   }
@@ -362,7 +406,7 @@ function settle(state: GameState) {
     state.stack = [];
     state.choice = null;
     state.winner = alive[0]?.id ?? state.turn.player;
-    log(state, `${getPlayer(state, state.winner).name} wins Cardsade!`, 'win');
+    log(state, `${getPlayer(state, state.winner).name} wins Cardsade!`, 'win', { type: 'win', who: state.winner });
     return;
   }
   if (state.stack.length === 0 && !state.choice && getPlayer(state, state.turn.player).eliminated) {
@@ -370,7 +414,7 @@ function settle(state: GameState) {
   }
 }
 
-function log(state: GameState, text: string, tone: LogTone) {
-  state.log.push({ id: state.nextId++, text, tone });
+function log(state: GameState, text: string, tone: LogTone, fx?: FxEvent) {
+  state.log.push({ id: state.nextId++, text, tone, fx });
   if (state.log.length > 200) state.log.splice(0, state.log.length - 200);
 }
