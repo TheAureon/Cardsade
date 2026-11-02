@@ -1922,3 +1922,395 @@ summary:focus-visible {
   background: var(--green);
   text-shadow: 0 2px 0 var(--ink);
 }
+
+/* ---------- Title screen ---------- */
+.arena.title-screen {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  justify-items: center;
+  align-items: center;
+  gap: 8px;
+  padding-block: 12px 0;
+  overflow: hidden;
+}
+.sunburst {
+  position: fixed;
+  left: 50%;
+  top: 34%;
+  z-index: 0;
+  width: 220vmax;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 214, 60, 0.22) 0deg 8deg, transparent 8deg 16deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0 12%, transparent 50%);
+  mask-image: radial-gradient(circle, #000 0 12%, transparent 50%);
+  pointer-events: none;
+  animation: sun-spin 90s linear infinite;
+}
+.embers {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.embers span {
+  position: absolute;
+  bottom: -12px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 10px 2px rgba(255, 138, 0, 0.8);
+  animation: ember linear infinite;
+}
+.title-stage {
+  position: relative;
+  z-index: 2;
+  width: min(100%, 940px);
+  height: clamp(250px, 46vh, 460px);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  animation: stage-shake 0.45s ease-out 0.8s both;
+}
+.orbit {
+  --orx: 42%;
+  --ory: 30%;
+  position: absolute;
+  inset: 0;
+  animation: fade-in 0.8s ease-out 1s both;
+}
+.orbit-card {
+  position: absolute;
+  left: calc(50% + var(--x, 0) * var(--orx));
+  top: calc(46% + var(--y, 0) * var(--ory));
+  translate: -50% -50%;
+  scale: calc(0.55 + var(--d, 0.5) * 0.55);
+  rotate: var(--spin, 0deg);
+  filter: brightness(calc(0.5 + var(--d, 0.5) * 0.5)) drop-shadow(0 calc(4px + var(--d, 0.5) * 18px) 10px rgba(0, 0, 0, 0.45));
+}
+.title-impact {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  z-index: 2;
+  width: min(120%, 900px);
+  aspect-ratio: 2.4;
+  translate: -50% -50%;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.95), rgba(255, 210, 31, 0.6) 35%, transparent 65%);
+  pointer-events: none;
+  animation: impact 0.8s ease-out 0.75s both;
+}
+.title-logo {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(4rem, 17vw, 10.5rem);
+  line-height: 0.9;
+  letter-spacing: 0.01em;
+  transform: rotate(-5deg) skewX(-6deg);
+}
+.title-logo span {
+  display: inline-block;
+  color: var(--gold);
+  -webkit-text-stroke: 0.045em var(--ink);
+  paint-order: stroke fill;
+  text-shadow:
+    0.04em 0.06em 0 var(--ink),
+    0.08em 0.11em 0 #7a0008,
+    0 0 0.4em rgba(255, 170, 0, 0.35);
+  animation:
+    letter-slam 0.55s var(--spring) both,
+    letter-wave 2.6s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 70ms + 150ms), calc(var(--i) * 0.12s + 1.4s);
+}
+.title-logo span:nth-child(odd) {
+  rotate: -3deg;
+}
+.title-logo span:nth-child(even) {
+  rotate: 3deg;
+}
+.title-logo .l-sade {
+  color: var(--orange);
+}
+.title-tagline {
+  position: relative;
+  z-index: 5;
+  margin: 18px 0 0;
+  padding: 0.15em 1em 0.1em;
+  font-family: var(--display);
+  font-size: clamp(1rem, 3.4vw, 1.5rem);
+  letter-spacing: 0.4em;
+  color: var(--paper);
+  background: var(--ink);
+  transform: rotate(-3deg);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.4);
+  animation: tagline-in 0.5s var(--spring) 1.15s both;
+}
+.title-menu {
+  position: relative;
+  z-index: 5;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  animation: rise-in 0.6s var(--spring) 1.3s both;
+}
+.btn.play-btn {
+  font-size: clamp(2.2rem, 8vw, 3.2rem);
+  padding: 0.22em 2.2em 0.12em;
+  border-width: 4px;
+  border-radius: 16px;
+  box-shadow: 0 7px 0 var(--ink);
+  animation: play-pulse 1.4s ease-in-out infinite;
+}
+.btn.play-btn:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.07);
+  box-shadow: 0 10px 0 var(--ink);
+}
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.title-row .btn {
+  font-size: 1.05rem;
+}
+.title-row .btn[aria-pressed='true'] {
+  color: var(--paper);
+  background: var(--green);
+  text-shadow: 0 2px 0 var(--ink);
+}
+.title-blurb {
+  margin: 0;
+  padding: 0.3em 1em;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--muted);
+  background: rgba(20, 0, 2, 0.45);
+  border-radius: 999px;
+}
+.title-cast {
+  position: relative;
+  z-index: 3;
+  align-self: end;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: clamp(4px, 2vw, 22px);
+  width: 100%;
+  padding-top: 24px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+}
+.cast-card {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: clamp(48px, 12vw, 120px);
+  min-width: 0;
+  animation:
+    cast-in 0.5s var(--spring) both,
+    bob 3s ease-in-out infinite;
+  animation-delay: calc(1.4s + var(--i) * 80ms), calc(var(--i) * -0.5s);
+}
+.cast-card:nth-child(odd) {
+  rotate: -4deg;
+}
+.cast-card:nth-child(even) {
+  rotate: 4deg;
+}
+.cast-frame {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 4px solid var(--paper);
+  box-shadow:
+    0 0 0 3px var(--ink),
+    6px 6px 0 3px rgba(0, 0, 0, 0.45);
+}
+.cast-card.hero-card {
+  width: clamp(58px, 14vw, 140px);
+}
+.cast-card.hero-card .cast-frame {
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 0 0 8px var(--gold),
+    0 0 28px 8px rgba(255, 210, 31, 0.6);
+}
+.cast-card .nameplate {
+  font-size: clamp(0.7rem, 2vw, 1rem);
+  padding-right: 0.9em;
+}
+.overlay .rules-panel {
+  justify-items: stretch;
+  max-height: 86vh;
+  overflow: auto;
+  text-align: left;
+}
+.overlay .rules-panel h2,
+.overlay .rules-panel > .btn {
+  justify-self: center;
+}
+
+/* ---------- Setup header ---------- */
+.setup-top {
+  width: min(100%, 520px);
+  display: flex;
+}
+.setup-top .btn {
+  font-size: 1rem;
+  padding: 0.3em 0.8em 0.25em;
+}
+.setup-heading {
+  margin: 8px 0 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(2rem, 8vw, 3rem);
+  letter-spacing: 0.03em;
+  color: var(--gold);
+  -webkit-text-stroke: 0.05em var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0.05em 0.07em 0 var(--ink);
+  transform: rotate(-2deg);
+}
+
+/* ---------- Screen wipe ---------- */
+.wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.12) 1.6px, transparent 2px) 0 0 / 12px 12px,
+    repeating-linear-gradient(-60deg, var(--ink) 0 46px, #b0001a 46px 92px);
+  animation: wipe 0.6s cubic-bezier(0.7, 0, 0.3, 1) forwards;
+}
+
+@keyframes sun-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@keyframes ember {
+  0% {
+    translate: 0 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  100% {
+    translate: var(--drift) -105vh;
+    opacity: 0;
+  }
+}
+@keyframes stage-shake {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20% {
+    translate: -10px 6px;
+  }
+  40% {
+    translate: 8px -5px;
+  }
+  60% {
+    translate: -5px 3px;
+  }
+  80% {
+    translate: 3px -1px;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes impact {
+  0% {
+    opacity: 0;
+    scale: 0.3;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.7;
+  }
+}
+@keyframes letter-slam {
+  from {
+    scale: 3.4;
+    rotate: -30deg;
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+}
+@keyframes letter-wave {
+  50% {
+    translate: 0 -0.07em;
+  }
+}
+@keyframes tagline-in {
+  from {
+    translate: -60px 0;
+    opacity: 0;
+  }
+}
+@keyframes rise-in {
+  from {
+    translate: 0 40px;
+    opacity: 0;
+  }
+}
+@keyframes cast-in {
+  from {
+    translate: 0 140px;
+    opacity: 0;
+  }
+}
+@keyframes play-pulse {
+  50% {
+    scale: 1.05;
+    box-shadow:
+      0 7px 0 var(--ink),
+      0 0 0 6px rgba(255, 210, 31, 0.45),
+      0 0 34px 10px rgba(255, 210, 31, 0.6);
+  }
+}
+@keyframes wipe {
+  0% {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+  100% {
+    clip-path: polygon(115% 0, 140% 0, 140% 100%, 100% 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wipe {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .title-stage {
+    height: clamp(230px, 40vh, 320px);
+  }
+  .orbit {
+    --orx: 44%;
+    --ory: 26%;
+  }
+  .orbit-card .card {
+    --cw: 58px !important;
+  }
+  .title-tagline {
+    letter-spacing: 0.28em;
+  }
+}

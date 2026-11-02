@@ -1,13 +1,15 @@
-import { useEffect, useState, type CSSProperties } from 'react';
-import { CARD_INFO } from '../engine/cards';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createGame, type SeatSetup } from '../engine/engine';
-import type { Card, CardKind } from '../engine/types';
+import type { Card } from '../engine/types';
 import { CardView } from './CardView';
 import { unlockAudio } from './audio';
 import { AudioToggles } from './AudioToggles';
 import { music } from './music';
 import { GameHost, type GameClient } from '../host/GameHost';
 import { GameScreen } from './GameScreen';
+import { Rules } from './Rules';
+import { sfx } from './sound';
+import { TitleScreen } from './TitleScreen';
 
 const HERO_CARDS: Card[] = [
   { id: 'h1', kind: 'reverse', value: 0 },
@@ -25,9 +27,18 @@ interface Settings {
   drawCount: number;
 }
 
+type Screen = 'title' | 'setup' | 'game';
+
 export function App() {
   const [settings, setSettings] = useState<Settings>({ name: 'Crusader', opponents: 2, drawCount: 2 });
   const [game, setGame] = useState<{ host: GameHost; client: GameClient } | null>(null);
+  const [screen, setScreen] = useState<Screen>('title');
+  // Count screen changes so the wipe plays on every change but not on first load.
+  const changes = useRef(0);
+  const go = (next: Screen) => {
+    changes.current++;
+    setScreen(next);
+  };
 
   const start = () => {
     unlockAudio();
@@ -38,18 +49,48 @@ export function App() {
     const state = createGame(seats, { drawCount: settings.drawCount, seed: Date.now() >>> 0 });
     const host = new GameHost(state, { botDelayMs: 900 });
     setGame({ host, client: host.client('human') });
+    go('game');
   };
 
   const exit = () => {
     game?.host.dispose();
     setGame(null);
+    go('setup');
   };
 
-  if (game) return <GameScreen client={game.client} onExit={exit} />;
-  return <Setup settings={settings} onChange={setSettings} onStart={start} />;
+  const cast = [settings.name.trim() || 'Crusader', ...BOT_NAMES];
+
+  return (
+    <>
+      {screen === 'title' && <TitleScreen cast={cast} onPlay={() => go('setup')} />}
+      {screen === 'setup' && (
+        <Setup
+          settings={settings}
+          onChange={setSettings}
+          onStart={start}
+          onBack={() => {
+            sfx.click();
+            go('title');
+          }}
+        />
+      )}
+      {screen === 'game' && game && <GameScreen client={game.client} onExit={exit} />}
+      {changes.current > 0 && <div className="wipe" key={changes.current} aria-hidden="true" />}
+    </>
+  );
 }
 
-function Setup({ settings, onChange, onStart }: { settings: Settings; onChange: (s: Settings) => void; onStart: () => void }) {
+function Setup({
+  settings,
+  onChange,
+  onStart,
+  onBack,
+}: {
+  settings: Settings;
+  onChange: (s: Settings) => void;
+  onStart: () => void;
+  onBack: () => void;
+}) {
   // The menu theme starts with the first tap anywhere (browsers block audio before that).
   useEffect(() => {
     music.setIntensity(1);
@@ -57,14 +98,18 @@ function Setup({ settings, onChange, onStart }: { settings: Settings; onChange: 
   }, []);
   return (
     <div className="arena setup" onPointerDown={unlockAudio}>
+      <div className="setup-top">
+        <button type="button" className="btn ghost" onClick={onBack}>
+          ← Title
+        </button>
+      </div>
       <div className="hero">
         <div className="hero-fan" aria-hidden="true">
           {HERO_CARDS.map((c, i) => (
             <CardView key={c.id} card={c} width={92} disabled style={{ '--i': i } as CSSProperties} />
           ))}
         </div>
-        <h1 className="logo">Cardsade</h1>
-        <p className="tagline">Card + Crusade</p>
+        <h2 className="setup-heading">Choose your battle</h2>
       </div>
       <div className="comic-panel setup-panel">
         <label>
@@ -111,34 +156,7 @@ function Setup({ settings, onChange, onStart }: { settings: Settings; onChange: 
 
       <details className="comic-panel rules">
         <summary>How to play</summary>
-        <ul>
-          <li>Everyone starts with 100 HP and 7 cards. The last player standing wins.</li>
-          <li>
-            On your turn, play any action cards you like, then make <b>one attack</b> on a player. An attack does 1 damage, plus
-            your number cards, times your multipliers: <code>(1 + numbers) × multipliers</code>.
-          </li>
-          <li>You can draw at any point in your turn, but drawing ends it.</li>
-          <li>
-            When something comes at you, you can Block it, Reverse it, Skip it, or take it. The chain bounces back and forth
-            until someone takes it or blocks it.
-          </li>
-        </ul>
-        <table>
-          <tbody>
-            {(Object.keys(CARD_INFO) as CardKind[]).map((k) => (
-              <tr key={k}>
-                <th>{CARD_INFO[k].name}</th>
-                <td>
-                  {CARD_INFO[k].description}{' '}
-                  <span className="muted">
-                    ({CARD_INFO[k].blockable ? 'can be blocked' : "can't be blocked"},{' '}
-                    {CARD_INFO[k].reversible ? 'can be reversed' : "can't be reversed"})
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Rules />
       </details>
     </div>
   );
