@@ -2314,3 +2314,369 @@ summary:focus-visible {
     letter-spacing: 0.28em;
   }
 }
+
+/* ---------- Main menu extras ---------- */
+.menu-back {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: var(--gutter-l);
+  z-index: 6;
+  font-size: 1rem;
+  padding: 0.3em 0.8em 0.25em;
+}
+
+/* ---------- Cinematic title ----------
+   Timeline (matches TitleScreen.tsx): panels land from 0.25s, 0.28s apart;
+   flash + logo at 2.45s; tagline 2.95s; PRESS START 3.4s. Every intro
+   animation only animates *from* a start state, so removing it (skip, or
+   reduced motion) leaves the finished frame. */
+.arena.cine {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  padding-block: 0 calc(14px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+  cursor: pointer;
+  background: #120002;
+  outline: none;
+}
+.arena.cine::before,
+.arena.cine::after {
+  display: none;
+}
+.cine:not(.intro) .intro-anim {
+  animation: none !important;
+}
+
+.roster-drift {
+  position: fixed;
+  inset: -2% -10%;
+  z-index: 0;
+  animation: roster-drift 14s ease-in-out infinite alternate;
+}
+.roster {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  filter: brightness(0.42) saturate(0.85);
+  animation: roster-dim 0.45s ease-out 2.4s both;
+}
+.strip {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  margin-left: -1px;
+  transform: skewX(-10deg);
+  border-left: 6px solid var(--ink);
+}
+.strip-inner {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(80deg, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 22px),
+    var(--bg);
+  animation: strip-down 0.4s var(--spring) both;
+  animation-delay: calc(0.25s + var(--i) * 0.28s);
+}
+.strip:nth-child(even) .strip-inner {
+  animation-name: strip-up;
+}
+.strip-art {
+  position: absolute;
+  left: 50%;
+  bottom: -2%;
+  height: 70%;
+  aspect-ratio: 1;
+  /* one transform, not translate + transform: the minifier drops one of the pair */
+  transform: translateX(-50%) skewX(10deg);
+}
+.strip-art .avatar {
+  width: 100%;
+  height: 100%;
+}
+.strip-name {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  max-height: 40%;
+  overflow: hidden;
+  transform: translateX(-50%) skewX(10deg) rotate(180deg);
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+  font-family: var(--display);
+  font-size: clamp(1.3rem, 3.6vw, 3.4rem);
+  letter-spacing: 0.04em;
+  color: var(--paper);
+  -webkit-text-stroke: 0.08em var(--ink);
+  paint-order: stroke fill;
+}
+.strip-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--paper);
+  opacity: 0;
+  animation: strip-flash 0.35s ease-out both;
+  animation-delay: calc(0.5s + var(--i) * 0.28s);
+}
+
+.cine-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 44%, rgba(18, 0, 2, 0.85) 0%, rgba(18, 0, 2, 0.45) 55%, transparent 85%),
+    linear-gradient(to top, rgba(18, 0, 2, 0.9) 0%, transparent 30%);
+  animation: fade-in 0.4s ease-out 2.4s both;
+}
+.cine-burst {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  animation: burst-open 0.8s cubic-bezier(0.2, 0.9, 0.3, 1) 2.42s both;
+}
+.cine .sunburst {
+  top: 44%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 214, 60, 0.14) 0deg 7deg, transparent 7deg 14deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0 6%, transparent 32%);
+  mask-image: radial-gradient(circle, #000 0 6%, transparent 32%);
+}
+.cine .embers {
+  z-index: 2;
+}
+
+.cine-center {
+  position: relative;
+  z-index: 3;
+  align-self: center;
+  display: grid;
+  justify-items: center;
+  animation: stage-shake 0.5s ease-out 2.6s both;
+}
+.cine-logo-wrap {
+  position: relative;
+  animation: logo-drop 0.65s cubic-bezier(0.3, 1.5, 0.5, 1) 2.45s both;
+}
+.cine-logo {
+  display: flex;
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(4.6rem, 19vw, 13rem);
+  line-height: 0.9;
+  letter-spacing: 0.01em;
+  color: var(--gold);
+  -webkit-text-stroke: 0.045em var(--ink);
+  paint-order: stroke fill;
+  text-shadow:
+    0.04em 0.06em 0 var(--ink),
+    0.08em 0.12em 0 #7a0008,
+    0 0 0.5em rgba(255, 170, 0, 0.45);
+  transform: rotate(-5deg) skewX(-6deg);
+  white-space: nowrap;
+}
+.cine-logo .l-sade {
+  color: var(--orange);
+}
+.cine-shine {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.9) 50%, transparent 58%) 0 0 / 300% 100% no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  pointer-events: none;
+  animation: shine-sweep 3.4s ease-in-out 3.5s infinite;
+}
+.cine-tagline {
+  margin: 22px 0 0;
+  padding: 0.15em 1em 0.1em;
+  font-family: var(--display);
+  font-size: clamp(1.1rem, 3.6vw, 1.8rem);
+  letter-spacing: 0.45em;
+  color: var(--paper);
+  background: var(--ink);
+  border-block: 3px solid var(--gold);
+  transform: rotate(-3deg);
+  animation: tagline-in 0.5s var(--spring) 2.95s both;
+}
+.press-start {
+  position: relative;
+  z-index: 3;
+  width: 100vw;
+  display: grid;
+  place-items: center;
+  margin-bottom: 3vh;
+  padding-block: 8px 4px;
+  background: var(--ink);
+  border-block: 4px solid var(--gold);
+  transform: rotate(-2deg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  animation: rise-in 0.5s var(--spring) 3.4s both;
+}
+.press-start span {
+  display: block;
+  font-family: var(--display);
+  font-size: clamp(1.8rem, 6vw, 3rem);
+  letter-spacing: 0.12em;
+  color: var(--paper);
+  -webkit-text-stroke: 0.06em var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0.05em 0.07em 0 var(--ink);
+  animation: press-blink 1.1s steps(1, end) infinite;
+}
+@media (max-width: 640px) {
+  .strip-name {
+    font-size: 1.1rem;
+  }
+}
+.cine-foot {
+  position: relative;
+  z-index: 3;
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+  animation: fade-in 0.5s ease-out 3.6s both;
+}
+.cine-flash,
+.cine-exit {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--paper);
+  opacity: 0;
+  pointer-events: none;
+}
+.cine-flash {
+  animation: big-flash 0.6s ease-out 2.38s both;
+}
+
+/* Leaving: the logo punches toward the camera and the screen whites out. */
+.cine.leaving .cine-logo-wrap {
+  animation: logo-exit 0.6s ease-in forwards !important;
+}
+.cine.leaving .press-start span {
+  animation: press-go 0.12s steps(1, end) infinite !important;
+}
+.cine.leaving .cine-exit {
+  animation: exit-flash 0.6s ease-in forwards;
+}
+
+@keyframes roster-drift {
+  from {
+    translate: -2% 0;
+  }
+  to {
+    translate: 2% 0;
+  }
+}
+@keyframes roster-dim {
+  from {
+    filter: brightness(1) saturate(1);
+  }
+}
+@keyframes strip-down {
+  from {
+    translate: 0 -115%;
+  }
+}
+@keyframes strip-up {
+  from {
+    translate: 0 115%;
+  }
+}
+@keyframes strip-flash {
+  0% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes burst-open {
+  from {
+    scale: 0;
+    opacity: 0;
+  }
+}
+@keyframes logo-drop {
+  0% {
+    scale: 5;
+    rotate: -14deg;
+    opacity: 0;
+  }
+  55% {
+    scale: 0.9;
+    rotate: 2deg;
+    opacity: 1;
+  }
+}
+@keyframes shine-sweep {
+  0% {
+    background-position: 130% 0;
+  }
+  45%,
+  100% {
+    background-position: -30% 0;
+  }
+}
+@keyframes press-blink {
+  0%,
+  65% {
+    opacity: 1;
+  }
+  66%,
+  100% {
+    opacity: 0.35;
+  }
+}
+@keyframes press-go {
+  0% {
+    opacity: 1;
+    color: var(--gold);
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+@keyframes big-flash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes logo-exit {
+  to {
+    scale: 2.6;
+    opacity: 0;
+  }
+}
+@keyframes exit-flash {
+  0%,
+  40% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .strip {
+    border-left-width: 4px;
+  }
+  .strip-art {
+    height: 52%;
+  }
+  .cine-tagline {
+    letter-spacing: 0.3em;
+  }
+}

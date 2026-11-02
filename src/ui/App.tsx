@@ -9,6 +9,7 @@ import { GameHost, type GameClient } from '../host/GameHost';
 import { GameScreen } from './GameScreen';
 import { Rules } from './Rules';
 import { sfx } from './sound';
+import { MenuScreen } from './MenuScreen';
 import { TitleScreen } from './TitleScreen';
 
 const HERO_CARDS: Card[] = [
@@ -27,7 +28,7 @@ interface Settings {
   drawCount: number;
 }
 
-type Screen = 'title' | 'setup' | 'game';
+type Screen = 'title' | 'menu' | 'setup' | 'game';
 
 export function App() {
   const [settings, setSettings] = useState<Settings>({ name: 'Crusader', opponents: 2, drawCount: 2 });
@@ -62,7 +63,8 @@ export function App() {
 
   return (
     <>
-      {screen === 'title' && <TitleScreen cast={cast} onPlay={() => go('setup')} />}
+      {screen === 'title' && <TitleScreen cast={cast} onStart={() => go('menu')} />}
+      {screen === 'menu' && <MenuScreen cast={cast} onPlay={() => go('setup')} onTitle={() => go('title')} />}
       {screen === 'setup' && (
         <Setup
           settings={settings}
@@ -70,7 +72,7 @@ export function App() {
           onStart={start}
           onBack={() => {
             sfx.click();
-            go('title');
+            go('menu');
           }}
         />
       )}
@@ -100,7 +102,7 @@ function Setup({
     <div className="arena setup" onPointerDown={unlockAudio}>
       <div className="setup-top">
         <button type="button" className="btn ghost" onClick={onBack}>
-          ← Title
+          ← Menu
         </button>
       </div>
       <div className="hero">

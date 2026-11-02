@@ -1,185 +1,114 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { Card } from '../engine/types';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { unlockAudio } from './audio';
-import { AudioToggles } from './AudioToggles';
-import { Avatar } from './Avatar';
-import { CardView } from './CardView';
+import { Avatar, BACKDROPS } from './Avatar';
+import { Embers } from './MenuScreen';
 import { music } from './music';
-import { Rules } from './Rules';
 import { sfx } from './sound';
 
-const ORBIT: Card[] = [
-  { id: 'o1', kind: 'reverse', value: 0 },
-  { id: 'o2', kind: 'multiplier', value: 3 },
-  { id: 'o3', kind: 'number', value: 9 },
-  { id: 'o4', kind: 'block', value: 0 },
-  { id: 'o5', kind: 'skip', value: 0 },
-  { id: 'o6', kind: 'number', value: 4 },
-  { id: 'o7', kind: 'multiplier', value: 2 },
-  { id: 'o8', kind: 'discard', value: 0 },
-];
+type Phase = 'intro' | 'idle' | 'leaving';
 
-const LETTERS = 'CARDSADE'.split('');
+/** When each beat of the intro lands, in ms. The CSS uses the same timings. */
+const PANEL_START = 250;
+const PANEL_GAP = 280;
+const LOGO_AT = 2450;
+const INTRO_END = 3600;
 
-export function TitleScreen({ cast, onPlay }: { cast: string[]; onPlay: () => void }) {
-  const [rulesOpen, setRulesOpen] = useState(false);
+/**
+ * The attract screen: the roster slams in panel by panel, the logo drops
+ * with a flash and a shake, then it waits on PRESS START. Any key or tap
+ * skips the intro; the next one starts the game.
+ */
+export function TitleScreen({ cast, onStart }: { cast: string[]; onStart: () => void }) {
+  const [phase, setPhase] = useState<Phase>('intro');
+  const [touch] = useState(() => window.matchMedia?.('(pointer: coarse)').matches ?? false);
+
+  // Sound cues for the intro (silent until the browser allows audio).
+  useEffect(() => {
+    if (phase !== 'intro') return;
+    const timers = cast.map((_, i) => setTimeout(() => sfx.slam(i), PANEL_START + i * PANEL_GAP + 150));
+    timers.push(setTimeout(sfx.logo, LOGO_AT + 120));
+    timers.push(setTimeout(() => setPhase('idle'), INTRO_END));
+    return () => timers.forEach(clearTimeout);
+  }, [phase, cast]);
 
   useEffect(() => {
-    music.setIntensity(1);
-    music.play('menu');
-  }, []);
+    if (phase === 'idle') music.play('menu');
+  }, [phase]);
 
-  const play = () => {
+  const advance = useCallback(() => {
     unlockAudio();
-    sfx.yourTurn();
-    onPlay();
-  };
+    if (phase === 'intro') return setPhase('idle');
+    if (phase === 'idle') {
+      setPhase('leaving');
+      sfx.start();
+      setTimeout(onStart, 650);
+    }
+  }, [phase, onStart]);
 
-  // Enter or Space starts, like an arcade cabinet.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (rulesOpen) {
-        if (e.key === 'Escape') setRulesOpen(false);
-        return;
-      }
-      if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) play();
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      advance();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, [advance]);
 
   return (
-    <div className="arena title-screen" onPointerDown={unlockAudio}>
-      <div className="sunburst" aria-hidden="true" />
+    <div
+      className={`arena cine ${phase}`}
+      onPointerDown={advance}
+      role="button"
+      tabIndex={0}
+      aria-label={phase === 'intro' ? 'Skip intro' : 'Start'}
+    >
+      <div className="roster-drift" aria-hidden="true">
+        <div className="roster intro-anim">
+          {cast.map((name, i) => (
+            <div
+              key={name}
+              className="strip"
+              style={{ '--i': i, '--bg': BACKDROPS[i % BACKDROPS.length] } as CSSProperties}
+            >
+              <div className="strip-inner intro-anim">
+                <div className="strip-art">
+                  <Avatar seed={i} />
+                </div>
+                <span className="strip-name">{name}</span>
+                <span className="strip-flash intro-anim" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="cine-vignette intro-anim" aria-hidden="true" />
+      <div className="cine-burst intro-anim" aria-hidden="true">
+        <div className="sunburst" />
+      </div>
       <Embers />
 
-      <div className="title-stage">
-        <OrbitCards />
-        <div className="title-impact" aria-hidden="true" />
-        <h1 className="title-logo" aria-label="Cardsade">
-          {LETTERS.map((ch, i) => (
-            <span key={i} className={i < 4 ? 'l-card' : 'l-sade'} style={{ '--i': i } as CSSProperties} aria-hidden="true">
-              {ch}
-            </span>
-          ))}
-        </h1>
-        <p className="title-tagline">Card + Crusade</p>
+      <div className="cine-center intro-anim">
+        <div className="cine-logo-wrap intro-anim">
+          <h1 className="cine-logo">
+            <span className="l-card">CARD</span>
+            <span className="l-sade">SADE</span>
+          </h1>
+          <span className="cine-logo cine-shine" aria-hidden="true">
+            CARDSADE
+          </span>
+        </div>
+        <p className="cine-tagline intro-anim">Card + Crusade</p>
       </div>
 
-      <div className="title-menu">
-        <button type="button" className="btn primary play-btn" onClick={play} autoFocus>
-          Play
-        </button>
-        <div className="title-row">
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              unlockAudio();
-              sfx.click();
-              setRulesOpen(true);
-            }}
-          >
-            How to play
-          </button>
-          <AudioToggles className="btn" />
-        </div>
-        <p className="title-blurb">Fight 1–5 rivals · 100 HP each · Last one standing wins</p>
+      <div className="press-start intro-anim">
+        <span>{touch ? 'Tap to start' : 'Press start'}</span>
       </div>
+      <p className="cine-foot intro-anim">© 2026 Cardsade · v0.1</p>
 
-      <div className="title-cast" aria-hidden="true">
-        {cast.map((name, i) => (
-          <div key={name} className={`cast-card${i === 0 ? ' hero-card' : ''}`} style={{ '--i': i } as CSSProperties}>
-            <div className="cast-frame">
-              <Avatar seed={i} />
-            </div>
-            <span className="nameplate">{name}</span>
-          </div>
-        ))}
-      </div>
-
-      {rulesOpen && (
-        <div className="overlay" onClick={() => setRulesOpen(false)}>
-          <div className="comic-panel rules rules-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="How to play">
-            <h2>How to play</h2>
-            <Rules />
-            <button type="button" className="btn primary" onClick={() => setRulesOpen(false)}>
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Cards circling the logo on a tilted ring: positions come from an ellipse,
- * cards on the far side shrink, darken and pass behind the logo.
- */
-function OrbitCards() {
-  const refs = useRef<(HTMLDivElement | null)[]>([]);
-  useEffect(() => {
-    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    let raf = 0;
-    const start = performance.now();
-    const frame = (now: number) => {
-      const t = still ? 0.6 : (now - start) / 1000;
-      refs.current.forEach((el, i) => {
-        if (!el) return;
-        const a = t * 0.35 + (i / ORBIT.length) * Math.PI * 2;
-        const x = Math.cos(a);
-        const y = Math.sin(a);
-        const depth = (y + 1) / 2;
-        el.style.setProperty('--x', x.toFixed(4));
-        el.style.setProperty('--y', y.toFixed(4));
-        el.style.setProperty('--d', depth.toFixed(4));
-        el.style.setProperty('--spin', `${(x * 14 + Math.sin(t * 1.3 + i) * 6).toFixed(2)}deg`);
-        el.style.zIndex = depth > 0.5 ? '4' : '1';
-      });
-      if (!still) raf = requestAnimationFrame(frame);
-    };
-    raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-  return (
-    <div className="orbit" aria-hidden="true">
-      {ORBIT.map((c, i) => (
-        <div key={c.id} className="orbit-card" ref={(el) => void (refs.current[i] = el)}>
-          <CardView card={c} disabled width={84} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Embers() {
-  const [embers] = useState(() =>
-    Array.from({ length: 22 }, () => ({
-      left: Math.random() * 100,
-      size: 3 + Math.random() * 6,
-      delay: -Math.random() * 8,
-      dur: 6 + Math.random() * 6,
-      drift: (Math.random() - 0.5) * 120,
-    })),
-  );
-  return (
-    <div className="embers" aria-hidden="true">
-      {embers.map((e, i) => (
-        <span
-          key={i}
-          style={
-            {
-              left: `${e.left}%`,
-              width: e.size,
-              height: e.size,
-              animationDelay: `${e.delay}s`,
-              animationDuration: `${e.dur}s`,
-              '--drift': `${e.drift}px`,
-            } as CSSProperties
-          }
-        />
-      ))}
+      <div className="cine-flash intro-anim" aria-hidden="true" />
+      <div className="cine-exit" aria-hidden="true" />
     </div>
   );
 }

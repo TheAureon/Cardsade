@@ -1,6 +1,6 @@
 /** Comic-style portraits drawn in SVG. Each seat gets a look from its seat index. */
 
-const BACKDROPS = ['#2bb24c', '#1f7ae0', '#ff8a00', '#e0263a', '#8a4fe0', '#14b3c4'];
+export const BACKDROPS = ['#2bb24c', '#1f7ae0', '#ff8a00', '#e0263a', '#8a4fe0', '#14b3c4'];
 const SKINS = ['#f2c29a', '#c98a5e', '#8d5a3b', '#f6d6b8', '#6b4027', '#e0a878'];
 
 export function Avatar({ seed }: { seed: number }) {

@@ -101,6 +101,23 @@ export const sfx = {
   lose() {
     [392, 330, 262, 196].forEach((f, i) => tone(f, 0.3, 'triangle', 0.22, undefined, i * 0.18));
   },
+  /** A fighter panel crashing onto the title screen. */
+  slam(step: number) {
+    noise(0.16, 0.45, 1400);
+    tone(110 + step * 18, 0.18, 'square', 0.25, 55);
+  },
+  /** The logo landing: big boom plus a bright chord. */
+  logo() {
+    noise(0.6, 0.7, 900);
+    tone(90, 0.6, 'sine', 0.8, 35);
+    [523, 659, 784].forEach((f) => tone(f, 0.5, 'square', 0.1, f * 1.01, 0.05));
+  },
+  /** Press start: a rising zap into a power chord. */
+  start() {
+    tone(220, 0.25, 'sawtooth', 0.2, 1760);
+    [392, 523, 784].forEach((f) => tone(f, 0.45, 'square', 0.14, undefined, 0.2));
+    noise(0.3, 0.3, 3000, 0.2);
+  },
   click() {
     tone(520, 0.04, 'square', 0.12);
   },
