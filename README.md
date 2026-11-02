@@ -2,12 +2,18 @@
 
 **Card + Crusade.** A digital tabletop card battler that mixes DnD-style combat, Pokémon-style cards and duels, and Uno-style chaos. Fight 1–5 bot opponents. The last player standing wins.
 
+**To play:** open `index.html` in any browser, by double-clicking it or serving it from anywhere (for example GitHub Pages). It's a single self-contained file with no install or server needed. It needs an internet connection only for the comic fonts and falls back to system fonts without one.
+
+**To develop:**
+
 ```bash
 npm install
-npm run dev      # play at http://localhost:5173
+npm run dev      # opens http://localhost:5173/dev.html with live reload
 npm test         # engine rules + bot-vs-bot simulations
-npm run build
+npm run build    # typecheck, bundle, and regenerate index.html
 ```
+
+`index.html` is generated, so edit `src/` (or `dev.html`, the development entry) and run `npm run build` to update it.
 
 ## Rules
 

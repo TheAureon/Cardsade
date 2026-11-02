@@ -5,11 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/build-single.mjs",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -b",
-    "build:artifact": "vite build && node scripts/build-artifact.mjs"
+    "typecheck": "tsc -b"
   },
   "dependencies": {
     "react": "^19.3.1",
