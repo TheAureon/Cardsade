@@ -1907,3 +1907,18 @@ summary:focus-visible {
     font-size: 2.2rem;
   }
 }
+
+/* ---------- Audio toggles on the setup screen ---------- */
+.audio-row {
+  display: flex;
+  gap: 8px;
+}
+.audio-row .btn {
+  flex: 1;
+  font-size: 1.1rem;
+}
+.audio-row .btn[aria-pressed='true'] {
+  color: var(--paper);
+  background: var(--green);
+  text-shadow: 0 2px 0 var(--ink);
+}

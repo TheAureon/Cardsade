@@ -1,49 +1,13 @@
 /**
- * Tiny synthesized sound kit (Web Audio, no files). Every call is a no-op when
- * muted, when audio isn't available, or before the first user gesture.
+ * Tiny synthesized sound-effect kit (Web Audio, no files). Every call is a
+ * no-op when effects are muted or before the first user gesture.
  */
-let ctx: AudioContext | null = null;
-let master: GainNode | null = null;
-let muted = readMuted();
-
-function readMuted(): boolean {
-  try {
-    return localStorage.getItem('cardsade-muted') === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function isMuted() {
-  return muted;
-}
-
-export function setMuted(value: boolean) {
-  muted = value;
-  try {
-    localStorage.setItem('cardsade-muted', value ? '1' : '0');
-  } catch {
-    // Storage can be blocked; muting still works for this visit.
-  }
-}
-
-/** Call from a click handler so browsers allow audio. */
-export function unlockAudio() {
-  if (ctx) {
-    if (ctx.state === 'suspended') void ctx.resume();
-    return;
-  }
-  const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AC) return;
-  ctx = new AC();
-  master = ctx.createGain();
-  master.gain.value = 0.35;
-  master.connect(ctx.destination);
-}
+import { getAudio, isMuted } from './audio';
 
 function ready(): [AudioContext, GainNode] | null {
-  if (muted || !ctx || !master || ctx.state !== 'running') return null;
-  return [ctx, master];
+  const a = getAudio();
+  if (!a || isMuted('sfx')) return null;
+  return [a.ctx, a.sfx];
 }
 
 function tone(freq: number, dur: number, type: OscillatorType, gain = 0.5, slideTo?: number, delay = 0) {

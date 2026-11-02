@@ -1,9 +1,11 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { CARD_INFO } from '../engine/cards';
 import { createGame, type SeatSetup } from '../engine/engine';
 import type { Card, CardKind } from '../engine/types';
 import { CardView } from './CardView';
-import { unlockAudio } from './sound';
+import { unlockAudio } from './audio';
+import { AudioToggles } from './AudioToggles';
+import { music } from './music';
 import { GameHost, type GameClient } from '../host/GameHost';
 import { GameScreen } from './GameScreen';
 
@@ -48,8 +50,13 @@ export function App() {
 }
 
 function Setup({ settings, onChange, onStart }: { settings: Settings; onChange: (s: Settings) => void; onStart: () => void }) {
+  // The menu theme starts with the first tap anywhere (browsers block audio before that).
+  useEffect(() => {
+    music.setIntensity(1);
+    music.play('menu');
+  }, []);
   return (
-    <div className="arena setup">
+    <div className="arena setup" onPointerDown={unlockAudio}>
       <div className="hero">
         <div className="hero-fan" aria-hidden="true">
           {HERO_CARDS.map((c, i) => (
@@ -93,6 +100,9 @@ function Setup({ settings, onChange, onStart }: { settings: Settings; onChange: 
               </button>
             ))}
           </div>
+        </div>
+        <div className="audio-row">
+          <AudioToggles className="btn" />
         </div>
         <button type="button" className="btn primary big" onClick={onStart}>
           Begin the crusade

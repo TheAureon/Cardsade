@@ -15,7 +15,10 @@ import type { GameClient } from '../host/GameHost';
 import { Avatar } from './Avatar';
 import { CardBack, CardView, sortHand } from './CardView';
 import { burstPieces, FxLayer, makeConfetti, PALETTES, useFx, type StampVariant } from './Fx';
-import { isMuted, setMuted, sfx, unlockAudio } from './sound';
+import { isMuted, unlockAudio } from './audio';
+import { AudioToggles } from './AudioToggles';
+import { music } from './music';
+import { sfx } from './sound';
 
 type NameOf = (id: PlayerId) => string;
 
@@ -45,7 +48,6 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
   const [target, setTarget] = useState<PlayerId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [logOpen, setLogOpen] = useState(false);
-  const [muted, setMutedState] = useState(isMuted());
 
   const arenaRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -221,19 +223,33 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
           burst(e.who, 46, 170, PALETTES.party);
           later(() => shake(22), d);
           later(sfx.ko, d);
+          later(() => music.sting('ko'), d);
           break;
         case 'win':
-          if (e.who === me) {
-            if (!reduced) add(makeConfetti(), 4200, d + 200);
-            later(sfx.win, d + 200);
-          } else {
-            later(sfx.lose, d + 200);
-          }
+          if (e.who === me && !reduced) add(makeConfetti(), 4200, d + 200);
+          later(() => {
+            // The music sting is the fanfare; fall back to the effect version when music is off.
+            if (isMuted('music')) (e.who === me ? sfx.win : sfx.lose)();
+            music.sting(e.who === me ? 'win' : 'lose');
+          }, d + 200);
           break;
       }
     },
     [fx, me, shake, jolt],
   );
+
+  // ---------- Soundtrack: battle theme, hotter when things get dangerous ----------
+  useEffect(() => {
+    if (view.pending.kind !== 'gameOver') music.play('battle');
+  }, [view.pending.kind]);
+  const standing = view.players.filter((p) => !p.eliminated).length;
+  const danger =
+    pending.kind !== 'gameOver' &&
+    !self.eliminated &&
+    (self.hp <= 25 || standing === 2 || (pending.kind === 'response' && pending.player === me));
+  useEffect(() => {
+    music.setIntensity(danger ? 2 : 1);
+  }, [danger]);
 
   const lastLog = useRef(0);
   useEffect(() => {
@@ -262,19 +278,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
           Turn {view.turn.number} · {view.turn.player === me ? 'Your turn!' : `${nameOf(view.turn.player)}'s turn`}
         </span>
         <span className="hud-actions">
-          <button
-            type="button"
-            className="btn ghost"
-            aria-pressed={!muted}
-            onClick={() => {
-              setMuted(!muted);
-              setMutedState(!muted);
-              unlockAudio();
-              if (muted) sfx.click();
-            }}
-          >
-            {muted ? 'Sound off' : 'Sound on'}
-          </button>
+          <AudioToggles />
           <button type="button" className="btn ghost" onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen}>
             Log
           </button>
