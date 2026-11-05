@@ -49,12 +49,12 @@ Deck (79 cards): numbers 1–9 ×4 each, ×2 ×8, ×3 ×3, Block ×6, Reverse ×
 
 Everything you hear is synthesized live with Web Audio, so there are no audio files to download or license. Music and sound effects have separate on/off toggles, on the setup screen and in the top bar.
 
-The soundtrack is an original quiz-show style score: soft FM marimba and bell plucks, offbeat electric-piano chords, a round bass, claps, shakers and a woodblock "clock".
+The soundtrack is an original score that crosses a quiz show with a film trailer. The game-show side has marimba and bell melodies, offbeat electric piano, claps and a woodblock "clock". The cinematic side has a string section, driving spiccato strings, brass stabs and a horn line, timpani, war drums and cymbal swells. Everything plays through a generated concert-hall reverb and a compressor.
 
-- **Lobby theme** (title and menu): a jazzy, bouncy loop over Cmaj7–Am7–Dm7–G7 at 122 BPM.
-- **Battle theme**: a ticking countdown groove in A minor at 128 BPM. Every other pass, the lead switches from bell to a higher marimba.
-- **Danger mode**: the countdown speeds up to 144 BPM with double-time clock ticks, a driving kick and a swelling tension pad. It kicks in when you're at 25 HP or less, something is coming at you, or only two players are left.
-- **Stings**: a falling bell "eliminated" cue on every K.O., a winner-reveal chord with claps when you win, and gentle falling bells when you lose.
+- **Lobby theme** (title and menu): a jazzy, bouncy loop over Cmaj7–Am7–Dm7–G7 at 116 BPM, with a warm string bed, timpani and a cymbal swell at the loop point.
+- **Battle theme**: an A minor countdown at 124 BPM. Spiccato strings, brass and timpani hit on every chord, war drums keep the pulse, and the clock keeps ticking. The bell plays the tune, then the horns take it an octave down on the repeat.
+- **Danger mode**: speeds up to 140 BPM. The strings move to sixteenths, the drums hit every beat, the clock ticks twice as fast and a cymbal swells into every other bar. It kicks in when you're at 25 HP or less, something is coming at you, or only two players are left.
+- **Stings**: a trailer hit on every K.O. (timpani, low brass, crash), a brass fanfare with strings and claps when you win, and low strings with a falling horn when you lose.
 
 To use recorded music instead, list file URLs in `TRACK_FILES` in `src/ui/music.ts` (`menu`, `battle`, and optionally `danger`). A listed track replaces the synth version.
 
