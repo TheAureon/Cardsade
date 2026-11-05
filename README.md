@@ -56,6 +56,12 @@ The soundtrack is an original score that crosses a quiz show with a film trailer
 - **Danger mode**: speeds up to 152 BPM with doubled strings, offbeat drum hits and rolls, a sixteenth-note clock, and a crash and cymbal swell into every bar. It kicks in when you're at 25 HP or less, something is coming at you, or only two players are left.
 - **Stings**: a trailer hit on every K.O. (timpani, low brass, crash), a brass fanfare with strings and claps when you win, and low strings with a falling horn when you lose.
 
+**Sound effects** use the same instruments as the score (`src/ui/instruments.ts`), so the game sounds like one piece:
+- **Interface:** marimba notes, and selecting cards climbs a pentatonic scale as your combo grows. The woodblock clock is the click.
+- **Attacks and hits:** attacks fly with a cymbal swell and a string flick. Hits land with war drums and timpani, adding brass and a crash as the damage grows.
+- **Responses:** Block rings like metal on a shield, Reverse is a string run that snaps back with brass, and Skip is falling marimba cut off by the clock.
+- **Big moments:** your turn gets a horn fanfare, incoming attacks a low brass warning with the clock double-ticking, and K.O.s and the title logo a trailer BRAAAM.
+
 To use recorded music instead, list file URLs in `TRACK_FILES` in `src/ui/music.ts` (`menu`, `battle`, and optionally `danger`). A listed track replaces the synth version.
 
 ## Architecture (built for multiplayer)
