@@ -4,7 +4,7 @@
  */
 export type Channel = 'sfx' | 'music';
 
-const LEVEL: Record<Channel, number> = { sfx: 0.35, music: 0.2 };
+const LEVEL: Record<Channel, number> = { sfx: 0.35, music: 0.32 };
 
 let ctx: AudioContext | null = null;
 const buses: Partial<Record<Channel, GainNode>> = {};

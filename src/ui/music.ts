@@ -1,13 +1,16 @@
 /**
- * Procedural chiptune soundtrack (Web Audio, no files).
+ * Procedural quiz-show soundtrack (Web Audio, no files).
  *
- * A song is a chord progression plus a lead melody; bass, arpeggio and drums
- * are generated from the chords. A lookahead scheduler queues notes ~120 ms
- * ahead so timing stays tight even when the page is busy animating.
+ * Bright, bouncy game-show style: FM marimba and bell plucks, offbeat
+ * electric-piano stabs, a round bass, claps, shakers and a woodblock
+ * "clock". A song is a chord progression plus a lead melody and a few
+ * per-song patterns; a lookahead scheduler queues notes ~120 ms ahead so
+ * timing stays tight even while the page animates.
  *
- * Intensity 2 ("danger") speeds the battle theme up, doubles the hats and
- * drives the kick: used when you're low on HP, something is coming at you,
- * or it's down to the final duel.
+ * Intensity 2 ("danger") turns the battle theme into a countdown: faster,
+ * double-time clock ticks, a driving kick and a tension pad that swells.
+ * Used when you're low on HP, something is coming at you, or it's the
+ * final duel.
  */
 import { getAudio, getNoise, isMuted, onUnlock } from './audio';
 
@@ -25,7 +28,7 @@ export const TRACK_FILES: Partial<Record<TrackName | 'danger', string>> = {};
 interface Chord {
   /** Bass root as a MIDI note. */
   root: number;
-  /** Chord tones as semitones above the root. */
+  /** Chord tones as semitones above the root (7ths welcome). */
   tones: number[];
 }
 
@@ -37,70 +40,108 @@ interface Song {
   lead: number[][];
   /** [step, length] pairs within a 16-step bar. */
   rhythm: [number, number][];
-  style: 'battle' | 'menu';
+  /** [step, semitones above root] bass hits within a bar. */
+  bass: [number, number][];
+  /** Steps where the electric piano stabs the chord. */
+  stabs: number[];
+  style: 'lobby' | 'battle';
 }
 
+const MAJ7 = [0, 4, 7, 11];
+const MIN7 = [0, 3, 7, 10];
+const DOM7 = [0, 4, 7, 10];
 const MINOR = [0, 3, 7];
 const MAJOR = [0, 4, 7];
 
 const SONGS: Record<TrackName, Song> = {
-  battle: {
-    bpm: 138,
-    dangerBpm: 158,
-    style: 'battle',
-    // Am F C G | Am F G E
-    chords: [
-      { root: 45, tones: MINOR },
-      { root: 41, tones: MAJOR },
-      { root: 48, tones: MAJOR },
-      { root: 43, tones: MAJOR },
-      { root: 45, tones: MINOR },
-      { root: 41, tones: MAJOR },
-      { root: 43, tones: MAJOR },
-      { root: 40, tones: MAJOR },
-    ],
-    rhythm: [
-      [0, 3],
-      [3, 3],
-      [6, 2],
-      [8, 4],
-      [12, 2],
-      [14, 2],
-    ],
-    lead: [
-      [69, 72, 76, 74, 72, 71],
-      [72, 69, 65, 69, 72, 74],
-      [76, 74, 72, 67, 72, 76],
-      [74, 71, 67, 71, 74, 79],
-      [81, 79, 76, 72, 76, 79],
-      [77, 76, 72, 69, 72, 77],
-      [79, 77, 74, 71, 74, 79],
-      [76, 80, 83, 80, 76, 71],
-    ],
-  },
+  // Jazzy lobby loop: | Cmaj7 Am7 Dm7 G7 | Cmaj7 A7 Dm7 G7 |
   menu: {
-    bpm: 96,
-    dangerBpm: 96,
-    style: 'menu',
-    // C Am F G
+    bpm: 122,
+    dangerBpm: 122,
+    style: 'lobby',
     chords: [
-      { root: 48, tones: MAJOR },
-      { root: 45, tones: MINOR },
-      { root: 41, tones: MAJOR },
-      { root: 43, tones: MAJOR },
+      { root: 36, tones: MAJ7 },
+      { root: 33, tones: MIN7 },
+      { root: 38, tones: MIN7 },
+      { root: 31, tones: DOM7 },
+      { root: 36, tones: MAJ7 },
+      { root: 33, tones: DOM7 },
+      { root: 38, tones: MIN7 },
+      { root: 31, tones: DOM7 },
     ],
     rhythm: [
-      [0, 4],
-      [4, 4],
-      [8, 6],
+      [0, 2],
+      [3, 2],
+      [6, 2],
+      [8, 1],
+      [10, 3],
       [14, 2],
     ],
     lead: [
-      [72, 76, 79, 77],
-      [76, 72, 69, 71],
-      [72, 77, 81, 79],
-      [79, 74, 71, 74],
+      [76, 79, 76, 74, 72, 71],
+      [72, 76, 72, 69, 67, 69],
+      [74, 77, 74, 72, 69, 72],
+      [71, 74, 77, 76, 74, 71],
+      [79, 83, 79, 76, 74, 76],
+      [73, 76, 79, 76, 73, 69],
+      [77, 76, 74, 72, 74, 77],
+      [79, 77, 74, 71, 67, 71],
     ],
+    bass: [
+      [0, 0],
+      [3, 12],
+      [6, 7],
+      [8, 0],
+      [10, 12],
+      [14, 7],
+    ],
+    stabs: [2, 6, 10, 14],
+  },
+  // Countdown battle loop: | Am Am F G | Am Am Dm E7 |
+  battle: {
+    bpm: 128,
+    dangerBpm: 144,
+    style: 'battle',
+    chords: [
+      { root: 33, tones: MINOR },
+      { root: 33, tones: MINOR },
+      { root: 29, tones: MAJOR },
+      { root: 31, tones: MAJOR },
+      { root: 33, tones: MINOR },
+      { root: 33, tones: MINOR },
+      { root: 38, tones: MINOR },
+      { root: 28, tones: DOM7 },
+    ],
+    rhythm: [
+      [0, 1],
+      [2, 1],
+      [3, 2],
+      [6, 2],
+      [8, 1],
+      [10, 1],
+      [11, 2],
+      [14, 2],
+    ],
+    lead: [
+      [69, 72, 76, 74, 72, 69, 71, 72],
+      [76, 74, 72, 71, 69, 71, 72, 74],
+      [72, 69, 65, 69, 72, 77, 76, 72],
+      [74, 71, 67, 71, 74, 79, 77, 74],
+      [81, 79, 76, 79, 81, 76, 74, 72],
+      [76, 72, 69, 72, 76, 79, 81, 79],
+      [77, 74, 69, 74, 77, 81, 79, 77],
+      [76, 80, 83, 80, 76, 74, 71, 68],
+    ],
+    bass: [
+      [0, 0],
+      [3, 0],
+      [6, 12],
+      [8, 0],
+      [10, 7],
+      [11, 0],
+      [14, 12],
+    ],
+    stabs: [3, 6, 11, 14],
   },
 };
 
@@ -108,42 +149,98 @@ const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 // ---------- Instruments ----------
 
-function voice(
-  ac: AudioContext,
-  out: AudioNode,
-  t: number,
-  midi: number,
-  dur: number,
-  type: OscillatorType,
-  gain: number,
-  cutoff = 4000,
-) {
-  const osc = ac.createOscillator();
-  const filter = ac.createBiquadFilter();
+/** FM pluck: marimba (low ratio, short) through bell (higher ratio, longer). */
+function fm(ac: AudioContext, out: AudioNode, t: number, midi: number, dur: number, gain: number, ratio: number, index: number) {
+  const f = mtof(midi);
+  const car = ac.createOscillator();
+  const mod = ac.createOscillator();
+  const modGain = ac.createGain();
   const g = ac.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(mtof(midi), t);
-  filter.type = 'lowpass';
-  filter.frequency.value = cutoff;
+  car.frequency.value = f;
+  mod.frequency.value = f * ratio;
+  modGain.gain.setValueAtTime(f * index, t);
+  modGain.gain.exponentialRampToValueAtTime(f * 0.05, t + dur * 0.5);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(gain, t + 0.008);
-  g.gain.setValueAtTime(gain, t + dur * 0.6);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.004);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  osc.connect(filter).connect(g).connect(out);
-  osc.start(t);
-  osc.stop(t + dur + 0.02);
+  mod.connect(modGain).connect(car.frequency);
+  car.connect(g).connect(out);
+  mod.start(t);
+  car.start(t);
+  mod.stop(t + dur + 0.02);
+  car.stop(t + dur + 0.02);
 }
 
-function kick(ac: AudioContext, out: AudioNode, t: number, gain = 0.9) {
+const marimba = (ac: AudioContext, out: AudioNode, t: number, midi: number, gain = 0.2) => fm(ac, out, t, midi, 0.35, gain, 4, 1.3);
+const bell = (ac: AudioContext, out: AudioNode, t: number, midi: number, dur = 0.6, gain = 0.12) => fm(ac, out, t, midi, dur, gain, 3.5, 2.2);
+
+/** Electric piano chord stab (soft FM, 1:1 ratio). */
+function stab(ac: AudioContext, out: AudioNode, t: number, notes: number[], dur: number, gain = 0.05) {
+  for (const n of notes) fm(ac, out, t, n, dur, gain, 1, 1.4);
+}
+
+/** Round plucked bass: sine plus a little triangle through a lowpass. */
+function bass(ac: AudioContext, out: AudioNode, t: number, midi: number, dur: number, gain = 0.32) {
+  const f = mtof(midi);
+  const a = ac.createOscillator();
+  const b = ac.createOscillator();
+  const filter = ac.createBiquadFilter();
+  const g = ac.createGain();
+  a.type = 'sine';
+  b.type = 'triangle';
+  a.frequency.value = f;
+  b.frequency.value = f;
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(900, t);
+  filter.frequency.exponentialRampToValueAtTime(260, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  const bGain = ac.createGain();
+  bGain.gain.value = 0.35;
+  a.connect(filter);
+  b.connect(bGain).connect(filter);
+  filter.connect(g).connect(out);
+  for (const o of [a, b]) {
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+}
+
+/** Swelling tension pad: two detuned saws per note, slow filter rise. */
+function pad(ac: AudioContext, out: AudioNode, t: number, notes: number[], dur: number) {
+  const filter = ac.createBiquadFilter();
+  const g = ac.createGain();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(500, t);
+  filter.frequency.exponentialRampToValueAtTime(1800, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.035, t + dur * 0.7);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  filter.connect(g).connect(out);
+  for (const n of notes) {
+    for (const detune of [-8, 8]) {
+      const o = ac.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = mtof(n);
+      o.detune.value = detune;
+      o.connect(filter);
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    }
+  }
+}
+
+function kick(ac: AudioContext, out: AudioNode, t: number, gain = 0.7) {
   const osc = ac.createOscillator();
   const g = ac.createGain();
-  osc.frequency.setValueAtTime(150, t);
-  osc.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+  osc.frequency.setValueAtTime(120, t);
+  osc.frequency.exponentialRampToValueAtTime(45, t + 0.1);
   g.gain.setValueAtTime(gain, t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
   osc.connect(g).connect(out);
   osc.start(t);
-  osc.stop(t + 0.25);
+  osc.stop(t + 0.22);
 }
 
 function noiseHit(ac: AudioContext, out: AudioNode, t: number, dur: number, gain: number, type: BiquadFilterType, freq: number) {
@@ -160,13 +257,38 @@ function noiseHit(ac: AudioContext, out: AudioNode, t: number, dur: number, gain
   src.stop(t + dur + 0.02);
 }
 
-function snare(ac: AudioContext, out: AudioNode, t: number, gain = 0.5) {
-  noiseHit(ac, out, t, 0.14, gain, 'bandpass', 1900);
-  voice(ac, out, t, 55, 0.08, 'triangle', gain * 0.5, 2000);
+/** Hand clap: a few fast bursts then a short tail. */
+function clap(ac: AudioContext, out: AudioNode, t: number, gain = 0.32) {
+  for (const d of [0, 0.011, 0.022]) noiseHit(ac, out, t + d, 0.02, gain, 'bandpass', 1500);
+  noiseHit(ac, out, t + 0.03, 0.12, gain * 0.7, 'bandpass', 1300);
 }
 
-function hat(ac: AudioContext, out: AudioNode, t: number, gain = 0.16) {
-  noiseHit(ac, out, t, 0.035, gain, 'highpass', 7500);
+function shaker(ac: AudioContext, out: AudioNode, t: number, gain = 0.05) {
+  noiseHit(ac, out, t, 0.04, gain, 'highpass', 6500);
+}
+
+/** Woodblock tick: the countdown clock. */
+function tickBlock(ac: AudioContext, out: AudioNode, t: number, gain = 0.12, high = false) {
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(high ? 2100 : 1600, t);
+  osc.frequency.exponentialRampToValueAtTime(high ? 1700 : 1300, t + 0.04);
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  osc.connect(g).connect(out);
+  osc.start(t);
+  osc.stop(t + 0.06);
+}
+
+/** Chord tones voiced around middle C for stabs and pads. */
+function voicing(chord: Chord): number[] {
+  return chord.tones.map((iv) => {
+    let n = chord.root + iv;
+    while (n < 57) n += 12;
+    while (n > 69) n -= 12;
+    return n;
+  });
 }
 
 // ---------- Player ----------
@@ -204,36 +326,32 @@ function scheduleStep(ac: AudioContext, out: AudioNode, song: Song, s: number, t
   const hot = intensity === 2 && song.style === 'battle';
   const lastBar = bar === song.chords.length - 1;
 
+  // Bass and offbeat piano stabs carry the bounce.
+  for (const [at, iv] of song.bass) if (at === pos) bass(ac, out, t, chord.root + iv, sd * 2.2);
+  if (song.stabs.includes(pos)) stab(ac, out, t, voicing(chord), sd * 1.6, song.style === 'lobby' ? 0.045 : 0.04);
+
+  // Drums: light four-on-the-floor feel, claps on 2 and 4, shaker 16ths.
+  if (pos === 0 || pos === 8 || (hot && (pos === 4 || pos === 12))) kick(ac, out, t, song.style === 'lobby' ? 0.5 : 0.7);
+  if (pos === 4 || pos === 12) clap(ac, out, t, song.style === 'lobby' ? 0.22 : 0.3);
+  if (lastBar && pos === 14) clap(ac, out, t, 0.2);
+  shaker(ac, out, t, pos % 2 === 0 ? 0.05 : 0.03);
+
   if (song.style === 'battle') {
-    // Bass: driving eighths with octave jumps.
-    if (pos % 2 === 0) {
-      const off = [0, 0, 12, 0, 0, 12, 7, 12][pos / 2];
-      voice(ac, out, t, chord.root + off, sd * 1.7, 'square', 0.16, hot ? 900 : 650);
-    }
-    // Arpeggio: sixteenths through the chord, brighter when hot.
-    const arp = chord.tones[[0, 1, 2, 1][pos % 4]] + chord.root + 24;
-    voice(ac, out, t, arp, sd * 0.9, 'square', hot ? 0.06 : 0.04, hot ? 3200 : 1800);
-    // Drums, with a snare roll into the loop.
-    if (pos === 0 || pos === 8 || (hot && (pos === 3 || pos === 11))) kick(ac, out, t);
-    if (pos === 4 || pos === 12) snare(ac, out, t);
-    else if (lastBar && pos >= 13) snare(ac, out, t, 0.25 + (pos - 13) * 0.08);
-    if (hot || pos % 2 === 0) hat(ac, out, t, pos % 4 === 2 ? 0.2 : 0.12);
-  } else {
-    if (pos === 0 || pos === 8) voice(ac, out, t, chord.root, sd * 7, 'triangle', 0.22, 900);
-    if (pos % 2 === 0) {
-      const arp = chord.tones[[0, 1, 2, 1, 2, 0, 1, 2][pos / 2]] + chord.root + 24;
-      voice(ac, out, t, arp, sd * 1.8, 'triangle', 0.07, 2500);
-    }
-    if (pos % 4 === 2) hat(ac, out, t, 0.06);
+    // The clock: ticks on every beat, every eighth when the pressure's on.
+    if (pos % (hot ? 2 : 4) === 0) tickBlock(ac, out, t, hot ? 0.13 : 0.1, pos % 8 === 0);
+    // Tension pad swells across each bar in danger mode.
+    if (hot && pos === 0) pad(ac, out, t, voicing(chord), sd * 16);
   }
 
-  // Lead melody; every other time round it drops an octave for variety.
+  // Lead melody: marimba in the lobby, bell in battle. Every other pass
+  // the battle lead jumps up an octave on the marimba for variety.
   const hit = song.rhythm.findIndex(([at]) => at === pos);
   if (hit >= 0) {
     const [, len] = song.rhythm[hit];
-    const note = song.lead[bar][hit] - (loop % 2 === 1 ? 12 : 0);
-    if (song.style === 'battle') voice(ac, out, t, note, len * sd * 0.92, loop % 2 ? 'sawtooth' : 'square', 0.09, hot ? 4200 : 2800);
-    else voice(ac, out, t, note, len * sd * 0.95, 'triangle', 0.13, 3000);
+    const note = song.lead[bar][hit];
+    if (song.style === 'lobby') marimba(ac, out, t, note, 0.22);
+    else if (loop % 2 === 1) marimba(ac, out, t, note + 12, 0.14);
+    else bell(ac, out, t, note, Math.max(0.25, len * sd * 1.4), hot ? 0.13 : 0.11);
   }
 }
 
@@ -323,16 +441,13 @@ export const music = {
     const { ac, out } = o;
     const t = ac.currentTime + 0.05;
     if (kind === 'ko') {
-      // Duck the loop and hit three falling power chords: dun, dun, DUN.
+      // Duck the loop for a game-show "eliminated" cue: a falling bell triad and a thump.
       out.gain.cancelScheduledValues(t);
       out.gain.setTargetAtTime(0.3, t, 0.03);
       out.gain.setTargetAtTime(1, t + 1.1, 0.25);
-      [43, 41, 40].forEach((root, i) => {
-        const at = t + i * 0.22;
-        const len = i === 2 ? 0.9 : 0.18;
-        for (const iv of [0, 7, 12]) voice(ac, out, at, root + iv, len, 'sawtooth', 0.12, 1400);
-        kick(ac, out, at, 0.8);
-      });
+      [79, 75, 72, 67].forEach((n, i) => bell(ac, out, t + i * 0.13, n, 0.5, 0.14));
+      kick(ac, out, t, 0.8);
+      stab(ac, out, t + 0.52, [55, 58, 62], 0.7, 0.06);
       return;
     }
     desired = null;
@@ -342,16 +457,18 @@ export const music = {
     out.gain.cancelScheduledValues(t);
     out.gain.setValueAtTime(1, t);
     if (kind === 'win') {
-      // Fast rising arpeggio into a held major chord.
-      [60, 64, 67, 72, 76, 79].forEach((n, i) => voice(ac, out, t + i * 0.09, n, 0.16, 'square', 0.12, 3500));
-      for (const n of [72, 76, 79, 84]) voice(ac, out, t + 0.6, n, 1.6, 'square', 0.08, 3000);
-      voice(ac, out, t + 0.6, 48, 1.6, 'triangle', 0.25, 900);
-      kick(ac, out, t + 0.6);
-      snare(ac, out, t + 0.6, 0.4);
+      // Winner reveal: rising bell arpeggio into a bright held maj9 chord with claps.
+      [60, 64, 67, 71, 72, 76, 79].forEach((n, i) => marimba(ac, out, t + i * 0.07, n, 0.2));
+      stab(ac, out, t + 0.52, [60, 64, 67, 71, 74], 1.8, 0.06);
+      bell(ac, out, t + 0.52, 84, 1.6, 0.12);
+      bass(ac, out, t + 0.52, 36, 1.6, 0.35);
+      kick(ac, out, t + 0.52);
+      [0.52, 0.76, 0.88].forEach((d) => clap(ac, out, t + d, 0.25));
     } else {
-      // Slow falling minor line over a low drone.
-      [67, 63, 60, 55].forEach((n, i) => voice(ac, out, t + i * 0.32, n, 0.5, 'triangle', 0.16, 2000));
-      voice(ac, out, t, 36, 1.8, 'sawtooth', 0.08, 300);
+      // Gentle "better luck next time": falling bells over a soft minor chord.
+      [76, 72, 69, 64].forEach((n, i) => bell(ac, out, t + i * 0.26, n, 0.7, 0.11));
+      stab(ac, out, t + 1.05, [57, 60, 64], 1.6, 0.05);
+      bass(ac, out, t + 1.05, 33, 1.6, 0.3);
     }
   },
 };

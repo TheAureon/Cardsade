@@ -49,10 +49,12 @@ Deck (79 cards): numbers 1–9 ×4 each, ×2 ×8, ×3 ×3, Block ×6, Reverse ×
 
 Everything you hear is synthesized live with Web Audio, so there are no audio files to download or license. Music and sound effects have separate on/off toggles, on the setup screen and in the top bar.
 
-- **Menu theme**: a calm C major loop.
-- **Battle theme**: an A minor chiptune loop with drums. Every other time round, the lead drops an octave.
-- **Danger mode**: the battle theme speeds up (138 → 158 BPM), with doubled hi-hats, a driving kick and brighter synths. It kicks in when you're at 25 HP or less, something is coming at you, or only two players are left.
-- **Stings**: three falling power chords on every K.O., a fanfare when you win, and a falling minor line when you lose.
+The soundtrack is an original quiz-show style score: soft FM marimba and bell plucks, offbeat electric-piano chords, a round bass, claps, shakers and a woodblock "clock".
+
+- **Lobby theme** (title and menu): a jazzy, bouncy loop over Cmaj7–Am7–Dm7–G7 at 122 BPM.
+- **Battle theme**: a ticking countdown groove in A minor at 128 BPM. Every other pass, the lead switches from bell to a higher marimba.
+- **Danger mode**: the countdown speeds up to 144 BPM with double-time clock ticks, a driving kick and a swelling tension pad. It kicks in when you're at 25 HP or less, something is coming at you, or only two players are left.
+- **Stings**: a falling bell "eliminated" cue on every K.O., a winner-reveal chord with claps when you win, and gentle falling bells when you lose.
 
 To use recorded music instead, list file URLs in `TRACK_FILES` in `src/ui/music.ts` (`menu`, `battle`, and optionally `danger`). A listed track replaces the synth version.
 
