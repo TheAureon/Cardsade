@@ -51,9 +51,9 @@ Everything you hear is synthesized live with Web Audio, so there are no audio fi
 
 The soundtrack is an original score that crosses a quiz show with a film trailer. The game-show side has marimba and bell melodies, offbeat electric piano, claps and a woodblock "clock". The cinematic side has a string section, driving spiccato strings, brass stabs and a horn line, timpani, war drums and cymbal swells. Everything plays through a generated concert-hall reverb and a compressor.
 
-- **Lobby theme** (title and menu): a jazzy, bouncy loop over Cmaj7–Am7–Dm7–G7 at 116 BPM, with a warm string bed, timpani and a cymbal swell at the loop point.
-- **Battle theme**: an A minor countdown at 124 BPM. Spiccato strings, brass and timpani hit on every chord, war drums keep the pulse, and the clock keeps ticking. The bell plays the tune, then the horns take it an octave down on the repeat.
-- **Danger mode**: speeds up to 140 BPM. The strings move to sixteenths, the drums hit every beat, the clock ticks twice as fast and a cymbal swells into every other bar. It kicks in when you're at 25 HP or less, something is coming at you, or only two players are left.
+- **Lobby theme** (title and menu): a jazzy, driving loop over Cmaj7–Am7–Dm7–G7 at 126 BPM, with a four-on-the-floor kick, pulsing strings, timpani and a cymbal swell at the loop point.
+- **Battle theme**: an A minor countdown at 136 BPM. Relentless sixteenth-note strings, brass punches on beats 1 and 3, a trailer "BRAAAM" every four bars, and war drums on every beat, with the clock ticking in eighths. The bell plays the tune, then the horns take it an octave down on the repeat.
+- **Danger mode**: speeds up to 152 BPM with doubled strings, offbeat drum hits and rolls, a sixteenth-note clock, and a crash and cymbal swell into every bar. It kicks in when you're at 25 HP or less, something is coming at you, or only two players are left.
 - **Stings**: a trailer hit on every K.O. (timpani, low brass, crash), a brass fanfare with strings and claps when you win, and low strings with a falling horn when you lose.
 
 To use recorded music instead, list file URLs in `TRACK_FILES` in `src/ui/music.ts` (`menu`, `battle`, and optionally `danger`). A listed track replaces the synth version.

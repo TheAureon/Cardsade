@@ -13,8 +13,8 @@
  * tight even while the page animates.
  *
  * Intensity 2 ("danger") turns the battle theme into a countdown climax:
- * faster, sixteenth-note strings, drums on every beat, double-time clock and
- * a cymbal swell into every other bar. Used when you're low on HP, something
+ * faster, doubled sixteenth-note strings, offbeat drum hits and rolls,
+ * a sixteenth-note clock and a cymbal swell into every bar. Used when you're low on HP, something
  * is coming at you, or it's the final duel.
  */
 import { getAudio, getNoise, isMuted, onUnlock } from './audio';
@@ -61,8 +61,8 @@ const MAJOR = [0, 4, 7];
 const SONGS: Record<TrackName, Song> = {
   // Lobby: | Cmaj7 Am7 Dm7 G7 | Cmaj7 A7 Dm7 G7 |
   menu: {
-    bpm: 116,
-    dangerBpm: 116,
+    bpm: 126,
+    dangerBpm: 126,
     style: 'lobby',
     chords: [
       { root: 36, tones: MAJ7 },
@@ -104,8 +104,8 @@ const SONGS: Record<TrackName, Song> = {
   },
   // Battle: | Am Am F G | Am Am Dm E7 |
   battle: {
-    bpm: 124,
-    dangerBpm: 140,
+    bpm: 136,
+    dangerBpm: 152,
     style: 'battle',
     chords: [
       { root: 33, tones: MINOR },
@@ -139,9 +139,13 @@ const SONGS: Record<TrackName, Song> = {
     ],
     bass: [
       [0, 0],
-      [6, 0],
+      [2, 12],
+      [4, 0],
+      [6, 12],
       [8, 0],
-      [14, 0],
+      [10, 12],
+      [12, 0],
+      [14, 12],
     ],
     stabs: [3, 11],
   },
@@ -256,6 +260,28 @@ function brass(ac: AudioContext, out: AudioNode, t: number, notes: number[], dur
 /** French-horn melody: brass with a softer attack and darker tone. */
 function horn(ac: AudioContext, out: AudioNode, t: number, midi: number, dur: number, gain = 0.06) {
   brass(ac, out, t, [midi], dur, gain, 1300);
+}
+
+/** Trailer "BRAAAM": low brass cluster with a slow filter bloom and a sub drop. */
+function braaam(ac: AudioContext, out: AudioNode, t: number, root: number, dur: number, gain = 0.07) {
+  const filter = ac.createBiquadFilter();
+  const g = ac.createGain();
+  filter.type = 'lowpass';
+  filter.Q.value = 2;
+  filter.frequency.setValueAtTime(150, t);
+  filter.frequency.exponentialRampToValueAtTime(1400, t + 0.25);
+  filter.frequency.exponentialRampToValueAtTime(400, t + dur);
+  const end = env(g, t, 0.05, gain, dur * 0.5, dur * 0.5);
+  filter.connect(g).connect(out);
+  for (const n of [root, root + 7, root + 12]) saws(ac, filter, t, end, n, [-14, 0, 14], 2);
+  const sub = ac.createOscillator();
+  const sg = ac.createGain();
+  sub.frequency.setValueAtTime(mtof(root) * 2, t);
+  sub.frequency.exponentialRampToValueAtTime(mtof(root), t + 0.3);
+  env(sg, t, 0.01, 0.4, dur * 0.3, dur * 0.6);
+  sub.connect(sg).connect(out);
+  sub.start(t);
+  sub.stop(end + 0.05);
 }
 
 /** Round plucked bass: sine plus a little triangle through a lowpass. */
@@ -433,11 +459,11 @@ function output(): Mix | null {
     const wet = ac.createGain();
     const comp = ac.createDynamicsCompressor();
     verb.buffer = hallImpulse(ac);
-    wet.gain.value = 0.32;
-    comp.threshold.value = -16;
-    comp.ratio.value = 3;
-    comp.attack.value = 0.01;
-    comp.release.value = 0.25;
+    wet.gain.value = 0.24;
+    comp.threshold.value = -20;
+    comp.ratio.value = 4.5;
+    comp.attack.value = 0.005;
+    comp.release.value = 0.18;
     out.connect(duck);
     out.connect(verb).connect(wet).connect(duck);
     duck.connect(comp).connect(a.music);
@@ -479,30 +505,43 @@ function scheduleStep(ac: AudioContext, out: AudioNode, song: Song, s: number, t
 
   if (song.style === 'lobby') {
     // Warm string bed under the bounce; timpani and a swell around the loop point.
-    if (pos === 0) strings(ac, out, t, voicing(chord, 55, 67), sd * 16, 0.022, 1300);
-    if (pos === 0 || pos === 8) kick(ac, out, t, 0.4);
-    if (firstBar && pos === 0) timpani(ac, out, t, chord.root + 12, 0.3);
-    if (lastBar && pos === 0) swell(ac, out, t, t + sd * 16, 0.1);
+    if (pos === 0) strings(ac, out, t, voicing(chord, 55, 67), sd * 16, 0.026, 1700);
+    // Four on the floor and a pulsing string eighth keep the lobby moving.
+    if (pos % 4 === 0) kick(ac, out, t, 0.5);
+    if (pos % 2 === 0) spiccato(ac, out, t, chord.root + 24 + (pos % 4 === 2 ? 7 : 0), 0.035);
+    if (pos === 0) timpani(ac, out, t, chord.root + 12, firstBar ? 0.38 : 0.22);
+    if (lastBar && pos >= 12) timpani(ac, out, t, chord.root + 12, 0.18 + (pos - 12) * 0.05);
+    if (lastBar && pos === 0) swell(ac, out, t, t + sd * 16, 0.12);
+    if (firstBar && pos === 0 && loop > 0) crash(ac, out, t, 0.12);
   } else {
     // Cinematic engine room: spiccato ostinato, brass, timpani, war drums.
     const low = chord.root + 12;
-    const pattern = [0, 0, 7, 0, 12, 0, 7, 0];
-    if (hot || pos % 2 === 0) spiccato(ac, out, t, low + pattern[(hot ? pos : pos / 2) % 8], hot ? 0.065 : 0.055);
+    // Relentless sixteenth-note strings, accented on the beat, doubled an octave up when hot.
+    const pattern = [0, 0, 12, 0, 7, 0, 12, 7, 0, 0, 12, 0, 7, 12, 7, 0];
+    const accent = pos % 4 === 0 ? 1.3 : 1;
+    spiccato(ac, out, t, low + pattern[pos], (hot ? 0.07 : 0.06) * accent);
+    if (hot && pos % 2 === 0) spiccato(ac, out, t, low + 12 + pattern[pos], 0.04);
     if (pos === 0) {
-      strings(ac, out, t, voicing(chord, 52, 64), sd * 16, hot ? 0.03 : 0.02, hot ? 2400 : 1500);
-      brass(ac, out, t, voicing(chord, 48, 60), sd * 3, 0.05);
-      timpani(ac, out, t, chord.root + 12, 0.42);
+      strings(ac, out, t, voicing(chord, 52, 64), sd * 16, hot ? 0.034 : 0.026, hot ? 2800 : 2000);
+      timpani(ac, out, t, chord.root + 12, 0.48);
     }
-    if (pos === 8) timpani(ac, out, t, chord.root + 19, 0.25);
-    if (pos === 0 || pos === 8 || (hot && (pos === 4 || pos === 12))) warDrum(ac, out, t, hot ? 0.55 : 0.45);
-    // Drum fill and brass pickup into the top of the loop.
-    if (lastBar && pos >= 12) warDrum(ac, out, t, 0.3 + (pos - 12) * 0.08, 90 - (pos - 12) * 6);
-    if (lastBar && (pos === 12 || pos === 14)) brass(ac, out, t, voicing(chord, 52, 64), sd * 1.5, 0.045);
-    if (firstBar && pos === 0 && loop > 0) crash(ac, out, t, 0.14);
-    // Swell into the next bar every other bar when the pressure's on.
-    if (hot && pos === 0 && bar % 2 === 1) swell(ac, out, t, t + sd * 16, 0.12);
+    // Brass punches on beats 1 and 3, a BRAAAM to open every four bars.
+    if (pos === 0 || pos === 8) brass(ac, out, t, voicing(chord, 48, 60), sd * (pos === 0 ? 3 : 2), pos === 0 ? 0.06 : 0.045);
+    if (pos === 0 && bar % 4 === 0) braaam(ac, out, t, chord.root + 12, sd * 10, hot ? 0.08 : 0.065);
+    if (pos === 8) timpani(ac, out, t, chord.root + 19, 0.3);
+    // Drums on every beat, extra hits on the offbeats when hot.
+    if (pos % 4 === 0) warDrum(ac, out, t, hot ? 0.6 : 0.5);
+    if (pos % 4 === 0) kick(ac, out, t, 0.45);
+    if (hot && (pos === 6 || pos === 14)) warDrum(ac, out, t, 0.35, 95);
+    if (pos === 4 || pos === 12) clap(ac, out, t, 0.28);
+    // Drum fill and brass pickup into the top of the loop; a roll every other bar when hot.
+    if ((lastBar || (hot && bar % 2 === 1)) && pos >= 12) warDrum(ac, out, t, 0.32 + (pos - 12) * 0.08, 90 - (pos - 12) * 6);
+    if (lastBar && (pos === 12 || pos === 14)) brass(ac, out, t, voicing(chord, 52, 64), sd * 1.5, 0.05);
+    if (pos === 0 && (bar % 4 === 0 || hot) && (loop > 0 || bar > 0)) crash(ac, out, t, bar % 4 === 0 ? 0.15 : 0.09);
+    // Swell into the next bar every other bar, every bar when hot.
+    if (pos === 0 && (hot || bar % 2 === 1)) swell(ac, out, t, t + sd * 16, hot ? 0.14 : 0.1);
     // The quiz clock keeps ticking over the orchestra.
-    if (pos % (hot ? 2 : 4) === 0) tickBlock(ac, out, t, hot ? 0.11 : 0.085, pos % 8 === 0);
+    if (pos % (hot ? 1 : 2) === 0) tickBlock(ac, out, t, (hot ? 0.1 : 0.085) * (pos % 4 === 0 ? 1.2 : 0.8), pos % 8 === 0);
   }
 
   // Lead melody. Lobby: marimba, then bell on the repeat. Battle: bell over
@@ -515,9 +554,9 @@ function scheduleStep(ac: AudioContext, out: AudioNode, song: Song, s: number, t
       if (loop % 2 === 0) marimba(ac, out, t, note, 0.2);
       else bell(ac, out, t, note, 0.6, 0.1);
     } else if (loop % 2 === 0) {
-      bell(ac, out, t, note, Math.max(0.3, len * sd * 1.5), hot ? 0.12 : 0.1);
+      bell(ac, out, t, note, Math.max(0.3, len * sd * 1.5), hot ? 0.14 : 0.12);
     } else {
-      horn(ac, out, t, note - 12, Math.max(0.18, len * sd * 0.95), hot ? 0.065 : 0.055);
+      horn(ac, out, t, note - 12, Math.max(0.18, len * sd * 0.95), hot ? 0.075 : 0.065);
       marimba(ac, out, t, note + 12, 0.07);
     }
   }
