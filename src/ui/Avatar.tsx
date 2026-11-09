@@ -1,6 +1,12 @@
 /**
- * Anime-style portraits drawn in SVG (viewBox 0–100). Each seat index is a
- * character with its own hair, eyes, palette and accessories; moods change
+ * Painted, hand-drawn anime portraits in SVG (viewBox 0–100). The shapes are
+ * flat vector, then painted with filters: a wobble displacement makes the
+ * ink lines look hand-drawn, soft blurred shading and highlights read as
+ * brushwork, skin/hair/irises use painted gradients, and a watercolour wash
+ * and paper grain sit over the background and the whole portrait.
+ *
+ * Each seat index is a character with its own hair, eyes, palette and
+ * accessories; moods change
  * the eyes, brows and mouth using standard anime shorthand (glowing narrowed
  * eyes, pinprick shock eyes with gloom lines, spiral K.O. eyes, ^^ joy).
  *
@@ -23,7 +29,7 @@ const VIEWBOX: Record<Crop, string> = {
 
 export const BACKDROPS = ['#2bb24c', '#1f7ae0', '#ff8a00', '#e0263a', '#8a4fe0', '#14b3c4'];
 
-const LINE = '#2a1414';
+const LINE = '#3a1e14';
 /** Anime proportions: eyes drawn larger than life. */
 const EYE_SCALE = 1.28;
 
@@ -34,6 +40,18 @@ interface Palette {
   hairHi: string;
   iris: string;
   outfit: string;
+  /** Paint references filled in per portrait (gradients and the soft-brush filter). */
+  skinPaint?: string;
+  hairPaint?: string;
+  irisPaint?: string;
+  soft?: string;
+}
+
+/** Mix two #rrggbb colours: t=0 gives a, t=1 gives b. */
+function mix(a: string, b: string, t: number): string {
+  const ca = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
+  const cb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
+  return `#${ca.map((v, i) => Math.round(v + (cb[i] - v) * t).toString(16).padStart(2, '0')).join('')}`;
 }
 
 const PALETTES: Palette[] = [
@@ -54,9 +72,16 @@ const PALETTES: Palette[] = [
 export function Avatar({ seed, mood = 'normal', crop = 'full' }: { seed: number; mood?: Mood; crop?: Crop }) {
   const look = seed % 6;
   const bg = BACKDROPS[look];
-  const p = PALETTES[look];
+  const base = PALETTES[look];
   const id = useId().replace(/:/g, '');
   const glow = `url(#${id}-glow)`;
+  const p: Palette = {
+    ...base,
+    skinPaint: `url(#${id}-skin)`,
+    hairPaint: `url(#${id}-hair)`,
+    irisPaint: `url(#${id}-iris)`,
+    soft: `url(#${id}-soft)`,
+  };
   return (
     <svg
       className="avatar"
@@ -75,23 +100,74 @@ export function Avatar({ seed, mood = 'normal', crop = 'full' }: { seed: number;
           <stop offset="1" stopColor={p.iris} stopOpacity="0" />
         </radialGradient>
         <linearGradient id={`${id}-steel`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#e9eef3" />
-          <stop offset="0.55" stopColor="#a9b5c1" />
-          <stop offset="1" stopColor="#6c7884" />
+          <stop offset="0" stopColor="#f2f5f8" />
+          <stop offset="0.45" stopColor="#b3bec9" />
+          <stop offset="1" stopColor="#5f6b77" />
         </linearGradient>
+        {/* painted skin: lit from the upper left, warm into shadow */}
+        <radialGradient id={`${id}-skin`} cx="0.38" cy="0.32" r="0.8">
+          <stop offset="0" stopColor={mix(base.skin, '#fff4e8', 0.32)} />
+          <stop offset="0.5" stopColor={base.skin} />
+          <stop offset="1" stopColor={mix(base.shade, '#5a1a2a', 0.18)} />
+        </radialGradient>
+        <linearGradient id={`${id}-hair`} x1="0.2" y1="0" x2="0.6" y2="1">
+          <stop offset="0" stopColor={mix(base.hair, base.hairHi, 0.55)} />
+          <stop offset="0.45" stopColor={base.hair} />
+          <stop offset="1" stopColor={mix(base.hair, '#000000', 0.35)} />
+        </linearGradient>
+        {/* painted iris: dark at the rim, glowing low */}
+        <radialGradient id={`${id}-iris`} cx="0.5" cy="0.72" r="0.7">
+          <stop offset="0" stopColor={mix(base.iris, '#ffffff', 0.55)} />
+          <stop offset="0.45" stopColor={base.iris} />
+          <stop offset="1" stopColor={mix(base.iris, '#000000', 0.55)} />
+        </radialGradient>
+        <radialGradient id={`${id}-wash`} cx="0.45" cy="0.4" r="0.75">
+          <stop offset="0" stopColor={mix(bg, '#fff6e0', 0.35)} />
+          <stop offset="0.6" stopColor={bg} />
+          <stop offset="1" stopColor={mix(bg, '#1a0008', 0.45)} />
+        </radialGradient>
+        {/* hand-drawn wobble on ink lines and shape edges, then gouache-like mottling inside the paint */}
+        <filter id={`${id}-sketch`} x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed={look * 7 + 3} result="warp" />
+          <feDisplacementMap in="SourceGraphic" in2="warp" scale="1.4" xChannelSelector="R" yChannelSelector="G" result="drawn" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.16" numOctaves="3" seed={look * 5 + 1} result="brush" />
+          {/* opaque grey centred on 50%, so soft-light only nudges each colour up or down */}
+          <feColorMatrix in="brush" type="matrix" values="0.2 0.2 0.2 0 0.2  0.2 0.2 0.2 0 0.2  0.2 0.2 0.2 0 0.2  0 0 0 0 1" result="brushGrey" />
+          <feBlend in="brushGrey" in2="drawn" mode="soft-light" result="painted" />
+          <feComposite in="painted" in2="drawn" operator="in" />
+        </filter>
+        {/* soft brush: blurred shading and highlights */}
+        <filter id={`${id}-soft`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="1.3" />
+        </filter>
+        {/* watercolour blotches for the background */}
+        <filter id={`${id}-blotch`} x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.028" numOctaves="3" seed={look + 11} />
+          <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 0.97  0 0 0 0 0.9  1.1 0 0 0 -0.45" />
+        </filter>
+        {/* paper grain over everything */}
+        <filter id={`${id}-paper`} x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="2" seed="5" />
+          <feColorMatrix type="matrix" values="0 0 0 0 0.24  0 0 0 0 0.16  0 0 0 0 0.1  0 0 -1.6 0 1.05" />
+        </filter>
       </defs>
-      <rect width="100" height="100" fill={bg} />
-      {/* speed burst behind the head */}
-      <g opacity="0.28" fill="#fff">
+      {/* watercolour background */}
+      <rect width="100" height="100" fill={`url(#${id}-wash)`} />
+      <rect width="100" height="100" filter={`url(#${id}-blotch)`} opacity="0.35" />
+      {/* soft painted rays behind the head */}
+      <g opacity="0.22" fill="#fff8e0" filter={`url(#${id}-soft)`}>
         {Array.from({ length: 12 }, (_, i) => (
-          <polygon key={i} points="50,52 48,-10 52,-10" transform={`rotate(${i * 30} 50 52)`} />
+          <polygon key={i} points="50,52 47,-10 53,-10" transform={`rotate(${i * 30 + 8} 50 52)`} />
         ))}
       </g>
-      {look === 1 ? (
-        <Knight mood={mood} p={p} glow={glow} steel={`url(#${id}-steel)`} />
-      ) : (
-        <Person look={look} mood={mood} p={p} glow={glow} shade={`url(#${id}-shade)`} />
-      )}
+      <g filter={`url(#${id}-sketch)`}>
+        {look === 1 ? (
+          <Knight mood={mood} p={p} glow={glow} steel={`url(#${id}-steel)`} />
+        ) : (
+          <Person look={look} mood={mood} p={p} glow={glow} shade={`url(#${id}-shade)`} />
+        )}
+      </g>
+      <rect width="100" height="100" filter={`url(#${id}-paper)`} opacity="0.22" style={{ mixBlendMode: 'multiply' }} />
     </svg>
   );
 }
@@ -105,17 +181,25 @@ function Person({ look, mood, p, glow, shade }: { look: number; mood: Mood; p: P
     <>
       <BackHair look={look} p={p} />
       {/* shoulders and neck */}
-      <path d="M8 104 Q12 86 36 82 L50 90 L64 82 Q88 86 92 104 Z" fill={p.outfit} stroke={LINE} strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M43 70 L43 84 Q50 89 57 84 L57 70 Z" fill={p.skin} stroke={LINE} strokeWidth="1.6" />
-      <path d="M43 76 Q50 83 57 76 L57 80 Q50 85 43 80 Z" fill={p.shade} />
+      <path d="M8 104 Q12 86 36 82 L50 90 L64 82 Q88 86 92 104 Z" fill={p.outfit} stroke={LINE} strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M43 70 L43 84 Q50 89 57 84 L57 70 Z" fill={p.skinPaint} stroke={LINE} strokeWidth="1.5" />
+      <path d="M43 76 Q50 83 57 76 L57 80 Q50 85 43 80 Z" fill={p.shade} opacity="0.75" filter={p.soft} />
       {/* ears */}
-      <ellipse cx="30.5" cy="58" rx="2.6" ry="4.2" fill={p.skin} stroke={LINE} strokeWidth="1.4" />
-      <ellipse cx="69.5" cy="58" rx="2.6" ry="4.2" fill={p.skin} stroke={LINE} strokeWidth="1.4" />
+      <ellipse cx="30.5" cy="58" rx="2.6" ry="4.2" fill={p.skinPaint} stroke={LINE} strokeWidth="1.3" />
+      <ellipse cx="69.5" cy="58" rx="2.6" ry="4.2" fill={p.skinPaint} stroke={LINE} strokeWidth="1.3" />
       {/* face: anime proportions with a pointed chin */}
-      <path d={FACE} fill={p.skin} stroke={LINE} strokeWidth="1.8" strokeLinejoin="round" />
-      {/* cel shading: under the bangs, along the jaw */}
-      <path d="M31 47 Q50 40 69 47 L69 52 Q50 45.5 31 52 Z" fill={p.shade} opacity="0.85" />
-      <path d="M63 60 Q67 56 69.2 50 L69 58 Q67 68 58 76 Q61.5 70 63 60 Z" fill={p.shade} opacity="0.8" />
+      <path d={FACE} fill={p.skinPaint} stroke={LINE} strokeWidth="1.45" strokeLinejoin="round" />
+      {/* a faint second pencil pass, slightly off the ink line */}
+      <path d={FACE} fill="none" stroke={LINE} strokeWidth="0.6" opacity="0.35" transform="translate(0.7 -0.5)" />
+      {/* brushed shading under the bangs and along the jaw; warm blush; painted highlights */}
+      <g filter={p.soft}>
+        <path d="M31 47 Q50 40 69 47 L69 52.5 Q50 46 31 52.5 Z" fill={p.shade} opacity="0.7" />
+        <path d="M62 60 Q67 55 69.2 50 L69 58 Q67 68 58 76 Q61 70 62 60 Z" fill={p.shade} opacity="0.65" />
+        <ellipse cx="38" cy="65" rx="4.2" ry="2.2" fill="#ff7a8a" opacity="0.28" />
+        <ellipse cx="62" cy="65" rx="4.2" ry="2.2" fill="#ff7a8a" opacity="0.22" />
+        <ellipse cx="40" cy="62" rx="3" ry="1.6" fill="#fff" opacity="0.3" />
+        <path d="M49.6 58 L50.6 63.5" stroke="#fff" strokeWidth="1.4" opacity="0.35" />
+      </g>
       {(mood === 'intense' || mood === 'shock') && <path d={FACE} fill={shade} />}
       <Expression mood={mood} p={p} glow={glow} />
       <FrontHair look={look} p={p} />
@@ -125,14 +209,14 @@ function Person({ look, mood, p, glow, shade }: { look: number; mood: Mood; p: P
 
 /** Hair and headwear behind the face. */
 function BackHair({ look, p }: { look: number; p: Palette }) {
-  const hair = { fill: p.hair, stroke: LINE, strokeWidth: 1.8, strokeLinejoin: 'round' as const };
+  const hair = { fill: p.hairPaint, stroke: LINE, strokeWidth: 1.45, strokeLinejoin: 'round' as const };
   switch (look) {
     case 0:
       return <path d="M27 52 L17 40 L27 37 L18 23 L33 26 L31 9 L44 19 L50 3 L57 19 L69 9 L67 26 L82 23 L73 37 L83 40 L73 52 Z" {...hair} />;
     case 2:
       return (
         <>
-          <path d="M18 100 Q13 30 50 16 Q87 30 82 100 Z" fill="#6a3db8" stroke={LINE} strokeWidth="1.8" />
+          <path d="M18 100 Q13 30 50 16 Q87 30 82 100 Z" fill="#6a3db8" stroke={LINE} strokeWidth="1.5" />
           <path d="M27 44 Q24 72 29 96 L71 96 Q76 72 73 44 Z" {...hair} />
         </>
       );
@@ -156,14 +240,17 @@ function BackHair({ look, p }: { look: number; p: Palette }) {
 
 /** Bangs, hats and helmets in front of the face. */
 function FrontHair({ look, p }: { look: number; p: Palette }) {
-  const hair = { fill: p.hair, stroke: LINE, strokeWidth: 1.8, strokeLinejoin: 'round' as const };
-  const shine = { fill: p.hairHi, opacity: 0.85 };
+  const hair = { fill: p.hairPaint, stroke: LINE, strokeWidth: 1.45, strokeLinejoin: 'round' as const };
+  const shine = { fill: p.hairHi, opacity: 0.75, filter: p.soft };
+  // Loose pencil strokes that suggest individual strands.
+  const strands = { fill: 'none', stroke: LINE, strokeWidth: 0.6, opacity: 0.45, strokeLinecap: 'round' as const };
   switch (look) {
     case 0:
       return (
         <>
           <path d="M30 47 L32.5 32 Q50 22 67.5 32 L70 47 L64.5 38 L62.5 48 L56.5 37 L52.5 49 L47.5 37 L42.5 48 L39 38.5 L35 46.5 Z" {...hair} />
           <path d="M37 31 Q50 25.5 63 31 Q50 28.5 37 34.5 Z" {...shine} />
+          <path d="M41 33 Q44 38 42.5 45 M48 30 Q50.5 36 50 44 M55 31 Q55.5 38 58 44 M61 33 Q63 38 63 44" {...strands} />
           {/* red scarf */}
           <path d="M34 83 Q50 92 66 83 L68 89 Q50 99 32 89 Z" fill="#e0263a" stroke={LINE} strokeWidth="1.6" strokeLinejoin="round" />
         </>
@@ -173,8 +260,9 @@ function FrontHair({ look, p }: { look: number; p: Palette }) {
         <>
           <path d="M30.5 52 Q29.5 30 50 28 Q67 29 70 45 L65.5 39.5 Q60 47 52 39.5 Q45 50 37.5 43.5 L34 58 Z" {...hair} />
           <path d="M36 35 Q46 29 58 31 Q46 31.5 38 38 Z" {...shine} />
+          <path d="M34 40 Q38 33 47 31 M38 44 Q42 36 52 33 M56 37 Q62 34 67 40" {...strands} />
           {/* hood rim */}
-          <path d="M23 74 Q20 25 50 20.5 Q80 25 77 74 L71 75 Q73 33 50 30.5 Q27 33 29 75 Z" fill="#7d4fd0" stroke={LINE} strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M23 74 Q20 25 50 20.5 Q80 25 77 74 L71 75 Q73 33 50 30.5 Q27 33 29 75 Z" fill="#7d4fd0" stroke={LINE} strokeWidth="1.5" strokeLinejoin="round" />
           <path d="M27 60 Q25 31 50 24.5 Q34 32 31 60 Z" fill="#a27ae6" opacity="0.7" />
           {/* beauty mark */}
           <circle cx="61.5" cy="67" r="0.9" fill={LINE} />
@@ -185,8 +273,9 @@ function FrontHair({ look, p }: { look: number; p: Palette }) {
         <>
           <path d="M29.5 49 Q30 30 50 28 Q70 30 70.5 49 L66 40 L63.5 47 L58.5 37.5 L52.5 45 L46.5 36.5 L40.5 44.5 L36.5 38.5 L33 47 Z" {...hair} />
           <path d="M36 33 Q48 27.5 62 32 Q48 30.5 38 36.5 Z" {...shine} />
+          <path d="M39 36 Q41 39 40.5 43 M46 33 Q48 37 46.5 40 M53 33 Q53 38 52.5 43 M60 35 Q61 39 63 45" {...strands} />
           {/* crown */}
-          <path d="M33 31 L34.5 13 L42.5 21.5 L50 8.5 L57.5 21.5 L65.5 13 L67 31 Q50 26 33 31 Z" fill="#ffd21f" stroke={LINE} strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M33 31 L34.5 13 L42.5 21.5 L50 8.5 L57.5 21.5 L65.5 13 L67 31 Q50 26 33 31 Z" fill="#ffd21f" stroke={LINE} strokeWidth="1.5" strokeLinejoin="round" />
           <path d="M35 28 L65 28" stroke="#c99a00" strokeWidth="1.2" />
           <circle cx="50" cy="22.5" r="2.4" fill="#e0263a" stroke={LINE} strokeWidth="1" />
           <circle cx="40.5" cy="25" r="1.4" fill="#1f7ae0" stroke={LINE} strokeWidth="0.8" />
@@ -200,9 +289,9 @@ function FrontHair({ look, p }: { look: number; p: Palette }) {
       return (
         <>
           {/* horned helm */}
-          <path d="M30 22 Q15 16 12 3 Q24 12 34 15 Z" fill="#f4ecd8" stroke={LINE} strokeWidth="1.8" strokeLinejoin="round" />
-          <path d="M70 22 Q85 16 88 3 Q76 12 66 15 Z" fill="#f4ecd8" stroke={LINE} strokeWidth="1.8" strokeLinejoin="round" />
-          <path d="M27 47 Q27 17 50 16 Q73 17 73 47 L67 45 Q50 39 33 45 Z" fill="#8a96a3" stroke={LINE} strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M30 22 Q15 16 12 3 Q24 12 34 15 Z" fill="#f4ecd8" stroke={LINE} strokeWidth="1.5" strokeLinejoin="round" />
+          <path d="M70 22 Q85 16 88 3 Q76 12 66 15 Z" fill="#f4ecd8" stroke={LINE} strokeWidth="1.5" strokeLinejoin="round" />
+          <path d="M27 47 Q27 17 50 16 Q73 17 73 47 L67 45 Q50 39 33 45 Z" fill="#8a96a3" stroke={LINE} strokeWidth="1.5" strokeLinejoin="round" />
           <path d="M33 37 Q36 22 48 19.5 Q39 25 36.5 39 Z" fill="#dfe6ee" opacity="0.75" />
           <path d="M48.2 43 L48.2 61 L51.8 61 L51.8 43 Z" fill="#8a96a3" stroke={LINE} strokeWidth="1.4" />
           <path d="M28 45 Q50 37.5 72 45" fill="none" stroke="#5d6873" strokeWidth="1.4" />
@@ -216,6 +305,7 @@ function FrontHair({ look, p }: { look: number; p: Palette }) {
           <path d="M29 42 Q50 33 71 42 L71 48.5 Q50 40 29 48.5 Z" fill="#e0263a" stroke={LINE} strokeWidth="1.6" strokeLinejoin="round" />
           <path d="M70.5 43 L84 37 L81.5 46 L86 52 L71 48 Z" fill="#c4182c" stroke={LINE} strokeWidth="1.4" strokeLinejoin="round" />
           <path d="M35 41.5 Q50 36 65 41" fill="none" stroke="#ff7a86" strokeWidth="1" opacity="0.8" />
+          <path d="M30 26 Q36 30 38 36 M44 17 Q46 25 45 34 M58 15 Q57 24 55 33 M72 24 Q66 30 64 36" {...strands} stroke={p.hairHi} />
           {/* scar across the left eye */}
           <path d="M35.5 49.5 L45 63.5" stroke="#d96a6a" strokeWidth="1.3" strokeLinecap="round" />
           <path d="M37 53 L39.5 52 M40 57.5 L42.5 56.5" stroke="#d96a6a" strokeWidth="0.9" strokeLinecap="round" />
@@ -259,7 +349,7 @@ function Eye({ cx, dir, mood, p }: { cx: number; dir: 1 | -1; mood: Mood; p: Pal
       body = (
         <>
           <path d="M-5 56.4 Q0 52.4 5.6 54.8 Q0.5 60.4 -5 56.4 Z" fill="#fff" />
-          <ellipse cx="0" cy="56.6" rx="3.2" ry="3.9" fill={p.iris} />
+          <ellipse cx="0" cy="56.6" rx="3.2" ry="3.9" fill={p.irisPaint} />
           <path d="M-3.2 56.6 A3.2 3.9 0 0 1 3.2 56.6 Z" fill="#000" opacity="0.3" />
           <ellipse cx="0" cy="56.8" rx="0.8" ry="2.3" fill="#14060a" />
           <path d="M-5.9 56.2 Q-1 52 6.1 54 L7.9 52.2" {...line} strokeWidth="2.1" />
@@ -300,7 +390,7 @@ function Eye({ cx, dir, mood, p }: { cx: number; dir: 1 | -1; mood: Mood; p: Pal
       body = (
         <>
           <path d="M-5 56.4 Q-0.5 50.6 5.4 55.4 Q0.5 60.8 -5 56.4 Z" fill="#fff" />
-          <ellipse cx="0" cy="56.2" rx="3.3" ry="4.2" fill={p.iris} />
+          <ellipse cx="0" cy="56.2" rx="3.3" ry="4.2" fill={p.irisPaint} />
           <path d="M-3.3 56.2 A3.3 4.2 0 0 1 3.3 56.2 Z" fill="#000" opacity="0.3" />
           <ellipse cx="0" cy="56.6" rx="1.3" ry="2" fill="#14060a" />
           <path d="M-5.6 55.8 Q-0.5 49.8 5.8 54.6 L7.4 52.8" {...line} strokeWidth="2.4" />
@@ -381,15 +471,16 @@ function Knight({ mood, p, glow, steel }: { mood: Mood; p: Palette; glow: string
   return (
     <>
       {/* plume */}
-      <path d="M52 22 Q60 2 80 6 Q70 10 68 20 Q76 18 82 24 Q68 24 58 30 Z" fill={p.hair} stroke={LINE} strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M52 22 Q60 2 80 6 Q70 10 68 20 Q76 18 82 24 Q68 24 58 30 Z" fill={p.hairPaint} stroke={LINE} strokeWidth="1.5" strokeLinejoin="round" />
       <path d="M60 14 Q68 7 77 8" fill="none" stroke={p.hairHi} strokeWidth="1.4" opacity="0.8" />
       {/* armour */}
-      <path d="M8 104 Q12 84 36 80 L50 86 L64 80 Q88 84 92 104 Z" fill={p.outfit} stroke={LINE} strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8 104 Q12 84 36 80 L50 86 L64 80 Q88 84 92 104 Z" fill={p.outfit} stroke={LINE} strokeWidth="1.5" strokeLinejoin="round" />
       <path d="M30 90 Q50 82 70 90" fill="none" stroke="#7d8996" strokeWidth="1.4" />
       {/* helm */}
       <path d="M26.5 60 Q25.5 19.5 50 18.5 Q74.5 19.5 73.5 60 L72.5 75 Q50 88 27.5 75 Z" fill={steel} stroke={LINE} strokeWidth="2" strokeLinejoin="round" />
       <path d="M50 20 L50 49" stroke={LINE} strokeWidth="1.4" />
-      <path d="M33 33 Q38 23 47 21.5 Q39 27.5 36.5 45 Z" fill="#fff" opacity="0.6" />
+      <path d="M33 33 Q38 23 47 21.5 Q39 27.5 36.5 45 Z" fill="#fff" opacity="0.7" filter={p.soft} />
+      <path d="M62 30 Q68 40 68 56" fill="none" stroke="#fff" strokeWidth="1.5" opacity="0.35" filter={p.soft} />
       {/* visor slit */}
       <rect x="30.5" y="50.5" width="39" height="10" rx="3" fill="#141920" stroke={LINE} strokeWidth="1.2" />
       <VisorEyes mood={mood} glow={glow} />

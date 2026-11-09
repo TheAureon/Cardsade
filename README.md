@@ -78,7 +78,7 @@ The biggest moments cut away to short anime-style scenes. Each runs 1.3–3 seco
 | **Final showdown / 決戦** | When a 3+ player game is down to two: diagonal face-off split by lightning |
 | **Victory / 勝利, Defeat / 敗北** | Game over |
 
-The portraits (`src/ui/Avatar.tsx`) are hand-drawn anime-style SVG characters: big glossy eyes with lash flicks and highlights, cel shading, layered hair with shine, and per-character outfits and accessories. Scenes are built from these same SVG portraits, which have cutscene expressions (`intense`, `shock`, `ko`, `win`) and crops (`face`, and `eyes` for cut-in bands). The code is in `src/ui/Cutscene.tsx`, and the triggers are in `sceneFor` in `GameScreen.tsx`.
+The portraits (`src/ui/Avatar.tsx`) are painted, hand-drawn anime SVG characters. A displacement filter gives the ink lines a hand-drawn wobble with a faint second pencil pass, and a brush filter mottles the paint like gouache. Skin, hair and irises use painted gradients, and the shading, blush and highlights are soft brushwork, all over a watercolour wash and paper grain. Each character also has big glossy eyes and their own outfit and accessories. Scenes are built from these same SVG portraits, which have cutscene expressions (`intense`, `shock`, `ko`, `win`) and crops (`face`, and `eyes` for cut-in bands). The code is in `src/ui/Cutscene.tsx`, and the triggers are in `sceneFor` in `GameScreen.tsx`.
 
 ## Architecture (built for multiplayer)
 
