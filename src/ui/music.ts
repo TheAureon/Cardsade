@@ -383,6 +383,15 @@ export const music = {
     intensity = level;
     refresh();
   },
+  /** Pull the music down under a cutscene for `ms`, then bring it back. */
+  duck(ms: number, level = 0.35) {
+    const o = output();
+    if (!o) return;
+    const t = o.ac.currentTime;
+    o.duck.gain.cancelScheduledValues(t);
+    o.duck.gain.setTargetAtTime(level, t, 0.05);
+    o.duck.gain.setTargetAtTime(1, t + ms / 1000, 0.25);
+  },
   /** Short musical hits for big moments. Win and lose end the battle theme. */
   sting(kind: Sting) {
     const o = output();

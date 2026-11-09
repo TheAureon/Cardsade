@@ -64,6 +64,22 @@ The soundtrack is an original score that crosses a quiz show with a film trailer
 
 To use recorded music instead, list file URLs in `TRACK_FILES` in `src/ui/music.ts` (`menu`, `battle`, and optionally `danger`). A listed track replaces the synth version.
 
+## Anime cutscenes
+
+The biggest moments cut away to short anime-style scenes. Each runs 1.3–3 seconds, and a tap or Enter/Space/Escape skips it. Bots wait while a scene plays, and the board's effects pick up right after, so nothing is missed. Turn them off with **Scenes on/off** on the setup screen or in the top bar. They're off by default if your device asks for reduced motion.
+
+| Scene | When |
+| --- | --- |
+| **Battle start / ファイト!** | Every new game: you against the field on split panels, a VS slam, then BATTLE START over an impact frame |
+| **Special move / 必殺技** | Attacks of 30+ damage or ×3 and up. The attacker's eyes in a slashing cut-in band, a generated move name (e.g. TRIPLE SHADOW BREAKER), the target's shocked reaction, then a white flash, an inverted frame and the damage on black focus lines |
+| **Counter! / 反撃** | Reversing an attack of 20+ |
+| **Guard! / 防御** | Blocking a special move |
+| **K.O. / 撃破** | Every knock-out: the loser's dazed face cracks apart |
+| **Final showdown / 決戦** | When a 3+ player game is down to two: diagonal face-off split by lightning |
+| **Victory / 勝利, Defeat / 敗北** | Game over |
+
+Scenes are built from the same SVG portraits, which have cutscene expressions (`intense`, `shock`, `ko`, `win`) and crops (`face`, and `eyes` for cut-in bands). The code is in `src/ui/Cutscene.tsx`, and the triggers are in `sceneFor` in `GameScreen.tsx`.
+
 ## Architecture (built for multiplayer)
 
 ```

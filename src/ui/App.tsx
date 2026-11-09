@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { createGame, type SeatSetup } from '../engine/engine';
 import type { Card } from '../engine/types';
 import { CardView } from './CardView';
@@ -8,6 +8,7 @@ import { music } from './music';
 import { GameHost, type GameClient } from '../host/GameHost';
 import { GameScreen } from './GameScreen';
 import { Rules } from './Rules';
+import { cutscenesOn, setCutscenes, subscribeSettings } from './settings';
 import { sfx } from './sound';
 import { MenuScreen } from './MenuScreen';
 import { TitleScreen } from './TitleScreen';
@@ -150,6 +151,7 @@ function Setup({
         </div>
         <div className="audio-row">
           <AudioToggles className="btn" />
+          <ScenesToggle />
         </div>
         <button type="button" className="btn primary big" onClick={onStart}>
           Begin the crusade
@@ -161,5 +163,14 @@ function Setup({
         <Rules />
       </details>
     </div>
+  );
+}
+
+function ScenesToggle() {
+  const on = useSyncExternalStore(subscribeSettings, cutscenesOn);
+  return (
+    <button type="button" className="btn" aria-pressed={on} onClick={() => setCutscenes(!on)}>
+      Scenes {on ? 'on' : 'off'}
+    </button>
   );
 }

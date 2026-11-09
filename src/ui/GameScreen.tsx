@@ -18,6 +18,8 @@ import { burstPieces, FxLayer, makeConfetti, PALETTES, useFx, type StampVariant 
 import { isMuted, unlockAudio } from './audio';
 import { AudioToggles } from './AudioToggles';
 import { music } from './music';
+import { CUTSCENE_MS, Cutscene, moveName, type CutsceneSpec, type Fighter } from './Cutscene';
+import { cutscenesOn, setCutscenes, subscribeSettings } from './settings';
 import { sfx } from './sound';
 
 type NameOf = (id: PlayerId) => string;
@@ -123,7 +125,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
   }, []);
 
   const playFx = useCallback(
-    (e: FxEvent, d: number) => {
+    (e: FxEvent, d: number, scene = false) => {
       const { add, later } = fx;
       const reduced = reducedMotion();
       const stamp = (id: PlayerId, text: string, variant: StampVariant, big = false) => {
@@ -166,14 +168,14 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
         case 'reverse':
           stamp(e.from, 'REVERSE!', 'reverse');
           fly(e.from, e.to, 'reverse', e.amount === null ? '⇄' : String(e.amount), d + 120);
-          later(sfx.reverse, d);
+          if (!scene) later(sfx.reverse, d);
           if (e.to === me) incoming(d + 480);
           break;
         case 'block':
           stamp(e.by, 'BLOCKED!', 'block');
           burst(e.by, 18, 90, PALETTES.block);
           later(() => jolt(e.by), d);
-          later(sfx.block, d);
+          if (!scene) later(sfx.block, d);
           break;
         case 'skipCounter':
           stamp(e.from, 'SKIP!', 'skip');
@@ -222,8 +224,10 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
           stamp(e.who, 'K.O.!', 'ko', true);
           burst(e.who, 46, 170, PALETTES.party);
           later(() => shake(22), d);
-          later(sfx.ko, d);
-          later(() => music.sting('ko'), d);
+          if (!scene) {
+            later(sfx.ko, d);
+            later(() => music.sting('ko'), d);
+          }
           break;
         case 'win':
           if (e.who === me && !reduced) add(makeConfetti(), 4200, d + 200);
@@ -251,11 +255,79 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
     music.setIntensity(danger ? 2 : 1);
   }, [danger]);
 
+  // ---------- Cutscenes: anime cut-ins for the biggest moments ----------
+  const [scenes, setScenes] = useState<{ id: number; spec: CutsceneSpec }[]>([]);
+  const sceneId = useRef(0);
+  const scenesOn = useSyncExternalStore(subscribeSettings, cutscenesOn);
+  /** When the queued scenes will have finished, so effects and bots wait for them. */
+  const busyUntil = useRef(0);
+  const shown = useRef({ start: false, showdown: false });
+  const lastSpecial = useRef<{ target: PlayerId; turn: number } | null>(null);
+  const fighter = useCallback(
+    (id: PlayerId): Fighter => {
+      const i = view.players.findIndex((p) => p.id === id);
+      return { id, name: view.players[i].name, seed: i };
+    },
+    [view.players],
+  );
+
+  /** Decides whether an engine event deserves a cutscene. */
+  const sceneFor = (e: FxEvent): CutsceneSpec | null => {
+    switch (e.type) {
+      case 'attack': {
+        const packet = view.stack.find((p) => p.kind === 'attack' && p.from === e.from && p.to === e.to);
+        const mult = packet?.multiplier ?? 1;
+        if (e.amount < 30 && mult < 3) return null;
+        lastSpecial.current = { target: e.to, turn: view.turn.number };
+        const a = fighter(e.from);
+        return { kind: 'special', attacker: a, target: fighter(e.to), move: moveName(a.seed, e.amount, mult), amount: e.amount };
+      }
+      case 'reverse':
+        return e.amount !== null && e.amount >= 20 ? { kind: 'counter', who: fighter(e.from), against: fighter(e.to), amount: e.amount } : null;
+      case 'block': {
+        const big = lastSpecial.current;
+        return big && big.target === e.by && big.turn === view.turn.number ? { kind: 'guard', who: fighter(e.by) } : null;
+      }
+      case 'ko':
+        return { kind: 'ko', who: fighter(e.who) };
+      case 'win':
+        return { kind: 'victory', winner: fighter(e.who), mine: e.who === me };
+      default:
+        return null;
+    }
+  };
+
   const lastLog = useRef(0);
   useEffect(() => {
     const entries = view.log.filter((e) => e.id > lastLog.current && e.fx);
     if (view.log.length) lastLog.current = view.log[view.log.length - 1].id;
-    entries.forEach((e, i) => playFx(e.fx!, i * 160));
+    const queue: CutsceneSpec[] = [];
+    const enqueue = (spec: CutsceneSpec) => {
+      const now = Date.now();
+      busyUntil.current = Math.max(now, busyUntil.current) + CUTSCENE_MS[spec.kind];
+      queue.push(spec);
+    };
+    const on = scenesOn && !reducedMotion();
+    if (on && !shown.current.start && view.turn.number === 1) {
+      shown.current.start = true;
+      enqueue({ kind: 'start', hero: fighter(me), rivals: view.players.filter((p) => p.id !== me).map((p) => fighter(p.id)) });
+    }
+    entries.forEach((e, i) => {
+      const spec = on ? sceneFor(e.fx!) : null;
+      if (spec) enqueue(spec);
+      // Effects wait for any scene in front of them.
+      playFx(e.fx!, Math.max(i * 160, busyUntil.current - Date.now()), Boolean(spec));
+    });
+    // Down to two after a knock-out: the final showdown.
+    const left = view.players.filter((p) => !p.eliminated);
+    if (on && !shown.current.showdown && left.length === 2 && view.players.length > 2 && !view.winner) {
+      shown.current.showdown = true;
+      enqueue({ kind: 'showdown', a: fighter(left[0].id), b: fighter(left[1].id) });
+    }
+    if (queue.length) {
+      setScenes((list) => [...list, ...queue.map((spec) => ({ id: ++sceneId.current, spec }))]);
+      client.hold?.(busyUntil.current - Date.now() + 400);
+    }
   }, [view.log, playFx]);
 
   // ---------- Parallax: layers drift with the mouse to sell depth ----------
@@ -279,6 +351,17 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
         </span>
         <span className="hud-actions">
           <AudioToggles />
+          <button
+            type="button"
+            className="btn ghost"
+            aria-pressed={scenesOn}
+            onClick={() => {
+              setCutscenes(!scenesOn);
+              if (scenesOn) setScenes([]);
+            }}
+          >
+            Scenes {scenesOn ? 'on' : 'off'}
+          </button>
           <button type="button" className="btn ghost" onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen}>
             Log
           </button>
@@ -415,6 +498,17 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
       </div>
 
       <FxLayer items={fx.items} />
+
+      {scenes[0] && (
+        <Cutscene
+          key={scenes[0].id}
+          spec={scenes[0].spec}
+          onDone={() => {
+            setScenes((list) => list.slice(1));
+            if (scenes.length <= 1) busyUntil.current = 0;
+          }}
+        />
+      )}
 
       {logOpen && (
         <aside className="log-drawer">

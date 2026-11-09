@@ -211,6 +211,40 @@ export const sfx = {
     timpani(r.ac, r.out, r.t + 0.3, 33, 0.55);
     crash(r.ac, r.out, r.t + 0.3, 0.16);
   },
+  /** Cutscene: a cut-in band slashing across the screen. */
+  cutIn() {
+    const r = ready();
+    if (!r) return;
+    swell(r.ac, r.out, r.t, r.t + 0.16, 0.22);
+    noiseHit(r.ac, r.out, r.t + 0.16, 0.18, 0.3, 'highpass', 2500);
+    brass(r.ac, r.out, r.t + 0.16, [45, 52, 57, 64], 0.5, 0.06, 3200);
+    timpani(r.ac, r.out, r.t + 0.16, 33, 0.45);
+  },
+  /** Cutscene: a reaction shot (shock, guard, counter). */
+  reaction(high = false) {
+    const r = ready();
+    if (!r) return;
+    noiseHit(r.ac, r.out, r.t, 0.14, 0.25, 'highpass', 3000);
+    [high ? 81 : 76, high ? 88 : 83].forEach((n, i) => bell(r.ac, r.out, r.t + i * 0.05, n, 0.6, 0.07));
+    warDrum(r.ac, r.out, r.t, 0.45, 85);
+  },
+  /** Cutscene: the impact frame, the screen inverting on the hit. */
+  impact() {
+    const r = ready();
+    if (!r) return;
+    braaam(r.ac, r.out, r.t, 28, 1.2, 0.09);
+    timpani(r.ac, r.out, r.t, 28, 0.7);
+    warDrum(r.ac, r.out, r.t, 0.7, 50);
+    crash(r.ac, r.out, r.t, 0.22);
+  },
+  /** Cutscene: lightning crack for the final showdown. */
+  thunder() {
+    const r = ready();
+    if (!r) return;
+    noiseHit(r.ac, r.out, r.t, 0.08, 0.6, 'highpass', 1500);
+    noiseHit(r.ac, r.out, r.t + 0.05, 1.6, 0.35, 'lowpass', 500);
+    timpani(r.ac, r.out, r.t, 28, 0.6);
+  },
   /** Interface click: the woodblock clock. */
   click() {
     const r = ready();

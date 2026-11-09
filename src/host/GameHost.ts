@@ -12,6 +12,11 @@ export interface GameClient {
   getView(): PlayerView;
   send(action: Action): { ok: true } | { ok: false; error: string };
   subscribe(listener: () => void): () => void;
+  /**
+   * Ask bots to wait at least `ms` before their next move, e.g. while a
+   * cutscene plays. Presentation-only; a networked host may ignore it.
+   */
+  hold?(ms: number): void;
 }
 
 /**
@@ -23,6 +28,7 @@ export class GameHost {
   private listeners = new Set<() => void>();
   private botTimer: ReturnType<typeof setTimeout> | null = null;
   private views = new Map<PlayerId, PlayerView>();
+  private holdUntil = 0;
 
   constructor(
     initial: GameState,
@@ -61,6 +67,12 @@ export class GameHost {
     return () => this.listeners.delete(listener);
   }
 
+  /** Keep bots from moving for at least `ms` (cutscenes, big animations). */
+  hold(ms: number) {
+    this.holdUntil = Math.max(this.holdUntil, Date.now() + ms);
+    if (this.botTimer) this.scheduleBot();
+  }
+
   dispose() {
     if (this.botTimer) clearTimeout(this.botTimer);
     this.listeners.clear();
@@ -72,6 +84,7 @@ export class GameHost {
       getView: () => this.getView(playerId),
       send: (action) => this.dispatch(action),
       subscribe: (l) => this.subscribe(l),
+      hold: (ms) => this.hold(ms),
     };
   }
 
@@ -87,7 +100,7 @@ export class GameHost {
       const result = this.dispatch(action);
       // A bad bot decision must never stall the game.
       if (!result.ok) this.dispatch(fallback(this.state, seat.id));
-    }, this.options.botDelayMs);
+    }, Math.max(this.options.botDelayMs, this.holdUntil - Date.now()));
   }
 }
 
