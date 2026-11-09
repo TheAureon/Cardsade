@@ -7,11 +7,12 @@
  *
  * Each seat index is a character with its own hair, eyes, palette and
  * accessories; moods change
- * the eyes, brows and mouth using standard anime shorthand (glowing narrowed
+ * the eyes and brows using standard anime shorthand (glowing narrowed
  * eyes, pinprick shock eyes with gloom lines, spiral K.O. eyes, ^^ joy).
  *
  * Shared geometry: face from y≈27 to the chin at y=80, eyes centred at
- * (41, 56) and (59, 56), mouth at y≈71. The crops below rely on it.
+ * (41, 56) and (59, 56). Faces have no mouths: the eyes carry the expression.
+ * The crops below rely on this geometry.
  */
 import { useId, type ReactNode } from 'react';
 
@@ -331,7 +332,6 @@ function Expression({ mood, p, glow }: { mood: Mood; p: Palette; glow: string })
       <Eye cx={59} dir={1} mood={mood} p={p} />
       {/* nose */}
       <path d="M50.6 62.4 L49.3 65.6 L51 65.8" fill="none" stroke={LINE} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
-      <Mouth mood={mood} />
       <Extras mood={mood} />
     </>
   );
@@ -414,32 +414,6 @@ function Eye({ cx, dir, mood, p }: { cx: number; dir: 1 | -1; mood: Mood; p: Pal
       )}
     </>
   );
-}
-
-function Mouth({ mood }: { mood: Mood }) {
-  const line = { fill: 'none', stroke: LINE, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
-  switch (mood) {
-    case 'intense':
-      return (
-        <>
-          <path d="M45.5 70.2 L54.5 70.2 L53.8 73.2 L46.2 73.2 Z" fill="#fff" stroke={LINE} strokeWidth="1" strokeLinejoin="round" />
-          <path d="M46 71.7 L54 71.7 M48.5 70.2 L48.5 73.2 M51.5 70.2 L51.5 73.2" stroke={LINE} strokeWidth="0.5" />
-        </>
-      );
-    case 'shock':
-      return <ellipse cx="50" cy="72" rx="2" ry="2.7" fill="#5a1018" stroke={LINE} strokeWidth="1" />;
-    case 'ko':
-      return <path d="M45 72 q1.5 -1.6 3 0 t3 0 t3 0" {...line} strokeWidth="1.2" />;
-    case 'win':
-      return (
-        <>
-          <path d="M44.8 69.8 Q50 77 55.2 69.8 Z" fill="#8a1a2a" stroke={LINE} strokeWidth="1.2" strokeLinejoin="round" />
-          <ellipse cx="50" cy="73.4" rx="2.1" ry="1.1" fill="#e86a7a" />
-        </>
-      );
-    default:
-      return <path d="M47 71.2 Q50 72.4 53 71.2" {...line} strokeWidth="1.2" />;
-  }
 }
 
 function Extras({ mood }: { mood: Mood }) {
