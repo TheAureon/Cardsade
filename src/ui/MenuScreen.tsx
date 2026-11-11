@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import type { Card } from '../engine/types';
 import { unlockAudio } from './audio';
 import { AudioToggles } from './AudioToggles';
@@ -7,6 +7,9 @@ import { CardView } from './CardView';
 import { music } from './music';
 import { Rules } from './Rules';
 import { sfx } from './sound';
+import { levelInfo } from '../progress/progression';
+import { getProfile, subscribeProfile, titleName } from './profileStore';
+import { LevelShield } from './Progress';
 
 const ORBIT: Card[] = [
   { id: 'o1', kind: 'reverse', value: 0 },
@@ -22,7 +25,18 @@ const ORBIT: Card[] = [
 const LETTERS = 'CARDSADE'.split('');
 
 /** The main menu: logo with orbiting cards, Play, rules and audio settings. */
-export function MenuScreen({ cast, onPlay, onTitle }: { cast: string[]; onPlay: () => void; onTitle: () => void }) {
+export function MenuScreen({
+  cast,
+  onPlay,
+  onTitle,
+  onProfile,
+}: {
+  cast: string[];
+  onPlay: () => void;
+  onTitle: () => void;
+  onProfile: () => void;
+}) {
+  const profile = useSyncExternalStore(subscribeProfile, getProfile);
   const [rulesOpen, setRulesOpen] = useState(false);
 
   useEffect(() => {
@@ -80,6 +94,21 @@ export function MenuScreen({ cast, onPlay, onTitle }: { cast: string[]; onPlay: 
       <div className="title-menu">
         <button type="button" className="btn primary play-btn" onClick={play} autoFocus>
           Play
+        </button>
+        <button
+          type="button"
+          className="menu-profile"
+          onClick={() => {
+            unlockAudio();
+            sfx.click();
+            onProfile();
+          }}
+        >
+          <LevelShield level={levelInfo(profile.xp).level} size={34} />
+          <span>
+            <b>{cast[0]}</b>
+            <small>{titleName(profile)} · Profile & achievements</small>
+          </span>
         </button>
         <div className="title-row">
           <button

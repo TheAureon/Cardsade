@@ -21,6 +21,9 @@ import { music } from './music';
 import { CUTSCENE_MS, Cutscene, moveName, type CutsceneSpec, type Fighter } from './Cutscene';
 import { cutscenesOn, setCutscenes, subscribeSettings } from './settings';
 import { sfx } from './sound';
+import { award as scoreMatch, grantDuring, levelInfo, newlyEarned, newMatch, track, type Achievement, type Award, type MatchStats } from '../progress/progression';
+import { getProfile, saveProfile, subscribeProfile, titleName } from './profileStore';
+import { AchievementToast, Results } from './Progress';
 
 type NameOf = (id: PlayerId) => string;
 
@@ -297,9 +300,52 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
     }
   };
 
+  // ---------- Progression: track this match, pay out achievements and XP ----------
+  const profile = useSyncExternalStore(subscribeProfile, getProfile);
+  const match = useRef<MatchStats>(newMatch(me, view.players.length - 1, view.config.startingHp));
+  const xpAtStart = useRef(getProfile().xp);
+  const finalized = useRef(false);
+  const [result, setResult] = useState<Award | null>(null);
+  const [toasts, setToasts] = useState<{ id: number; achievement: Achievement }[]>([]);
+  const toastId = useRef(0);
+
+  const finalize = useCallback(() => {
+    if (finalized.current) return null;
+    finalized.current = true;
+    const hp = view.players.find((p) => p.id === me)?.hp ?? 0;
+    const scored = scoreMatch({ ...match.current, finalHp: hp }, getProfile(), xpAtStart.current, Date.now());
+    saveProfile(scored.profile);
+    return scored;
+  }, [view.players, me]);
+
+  /** Leaving mid-game counts only once you're already knocked out (your placement is final). */
+  const leave = () => {
+    if (!finalized.current && match.current.placement !== null) finalize();
+    onExit();
+  };
+
   const lastLog = useRef(0);
   useEffect(() => {
     const entries = view.log.filter((e) => e.id > lastLog.current && e.fx);
+    const alive = view.players.filter((p) => !p.eliminated).length;
+    for (const e of entries) {
+      const fxEvent = e.fx!;
+      const packet = fxEvent.type === 'attack' ? view.stack.find((p) => p.kind === 'attack' && p.from === fxEvent.from) : undefined;
+      match.current = track(match.current, fxEvent, { attackCards: packet?.cards.length, attackMultiplier: packet?.multiplier, alive });
+      for (const a of newlyEarned(match.current, getProfile())) {
+        const granted = grantDuring(match.current, getProfile(), a, Date.now());
+        match.current = granted.match;
+        saveProfile(granted.profile);
+        const id = ++toastId.current;
+        setToasts((list) => [...list, { id, achievement: a }]);
+        fx.later(() => setToasts((list) => list.filter((t) => t.id !== id)), 4200);
+        fx.later(sfx.yourTurn, 200);
+      }
+      if (fxEvent.type === 'win') {
+        const scored = finalize();
+        if (scored) setResult(scored);
+      }
+    }
     if (view.log.length) lastLog.current = view.log[view.log.length - 1].id;
     const queue: CutsceneSpec[] = [];
     const enqueue = (spec: CutsceneSpec) => {
@@ -365,7 +411,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
           <button type="button" className="btn ghost" onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen}>
             Log
           </button>
-          <button type="button" className="btn ghost" onClick={onExit}>
+          <button type="button" className="btn ghost" onClick={leave}>
             Quit
           </button>
         </span>
@@ -455,6 +501,9 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
             </div>
             <div className="me-info">
               <span className="nameplate">{self.name}</span>
+              <span className="level-chip">
+                Lv {levelInfo(profile.xp).level} · {titleName(profile)}
+              </span>
               <HpBar hp={self.hp} max={view.config.startingHp} />
               <span className="badges">
                 {self.skipped && <span className="badge skipped">Skipped</span>}
@@ -468,7 +517,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
               {self.eliminated && pending.kind !== 'gameOver' && (
                 <>
                   <span className="muted">You're out. Watching the rest of the crusade…</span>
-                  <button type="button" className="btn" onClick={onExit}>
+                  <button type="button" className="btn" onClick={leave}>
                     New game
                   </button>
                 </>
@@ -544,7 +593,24 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
         </div>
       )}
 
-      {pending.kind === 'gameOver' && (
+      {toasts.length > 0 && (
+        <div className="ach-toasts">
+          {toasts.map((t) => (
+            <AchievementToast key={t.id} achievement={t.achievement} />
+          ))}
+        </div>
+      )}
+
+      {pending.kind === 'gameOver' && result && (
+        <Results
+          award={result}
+          placement={match.current.placement ?? view.players.length}
+          players={view.players.length}
+          winnerName={nameOf(pending.winner)}
+          onContinue={onExit}
+        />
+      )}
+      {pending.kind === 'gameOver' && !result && (
         <div className={`overlay${pending.winner === me ? ' won' : ' lost'}`}>
           <div className="comic-panel">
             <h2 className="big">{pending.winner === me ? 'Victory!' : `${nameOf(pending.winner)} wins!`}</h2>

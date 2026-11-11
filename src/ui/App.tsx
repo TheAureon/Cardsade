@@ -12,6 +12,7 @@ import { cutscenesOn, setCutscenes, subscribeSettings } from './settings';
 import { sfx } from './sound';
 import { MenuScreen } from './MenuScreen';
 import { TitleScreen } from './TitleScreen';
+import { ProfileScreen } from './ProfileScreen';
 
 const HERO_CARDS: Card[] = [
   { id: 'h1', kind: 'reverse', value: 0 },
@@ -29,7 +30,7 @@ interface Settings {
   drawCount: number;
 }
 
-type Screen = 'title' | 'menu' | 'setup' | 'game';
+type Screen = 'title' | 'menu' | 'profile' | 'setup' | 'game';
 
 export function App() {
   const [settings, setSettings] = useState<Settings>({ name: 'Crusader', opponents: 2, drawCount: 2 });
@@ -65,7 +66,10 @@ export function App() {
   return (
     <>
       {screen === 'title' && <TitleScreen cast={cast} onStart={() => go('menu')} />}
-      {screen === 'menu' && <MenuScreen cast={cast} onPlay={() => go('setup')} onTitle={() => go('title')} />}
+      {screen === 'menu' && (
+        <MenuScreen cast={cast} onPlay={() => go('setup')} onTitle={() => go('title')} onProfile={() => go('profile')} />
+      )}
+      {screen === 'profile' && <ProfileScreen name={cast[0]} onBack={() => go('menu')} />}
       {screen === 'setup' && (
         <Setup
           settings={settings}

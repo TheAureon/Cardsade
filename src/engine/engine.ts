@@ -307,10 +307,11 @@ function resolveTop(state: GameState) {
       log(state, `${target.name} takes ${dmg} damage (${target.hp} HP left)`, 'damage', {
         type: 'damage',
         to: target.id,
+        from: from.id,
         amount: dmg,
         hp: target.hp,
       });
-      if (target.hp <= 0) eliminate(state, target);
+      if (target.hp <= 0) eliminate(state, target, from.id);
       break;
     }
     case 'skip': {
@@ -358,12 +359,13 @@ function resolveTop(state: GameState) {
   }
 }
 
-function eliminate(state: GameState, player: PlayerState) {
+/** `by` is whoever sent the hit that finished them (credited with the K.O.). */
+function eliminate(state: GameState, player: PlayerState, by: PlayerId) {
   player.eliminated = true;
   player.skipped = false;
   state.discard.push(...player.hand);
   player.hand = [];
-  log(state, `${player.name} is knocked out!`, 'ko', { type: 'ko', who: player.id });
+  log(state, `${player.name} is knocked out!`, 'ko', { type: 'ko', who: player.id, by });
 }
 
 function drawCards(state: GameState, player: PlayerState, count: number): number {

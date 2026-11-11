@@ -83,10 +83,10 @@ export type FxEvent =
   | { type: 'cancelled'; who: PlayerId }
   | { type: 'skipped'; who: PlayerId }
   | { type: 'wasted'; who: PlayerId }
-  | { type: 'damage'; to: PlayerId; amount: number; hp: number }
+  | { type: 'damage'; to: PlayerId; from: PlayerId; amount: number; hp: number }
   | { type: 'discard'; who: PlayerId; count: number }
   | { type: 'draw'; who: PlayerId; count: number }
-  | { type: 'ko'; who: PlayerId }
+  | { type: 'ko'; who: PlayerId; by: PlayerId }
   | { type: 'win'; who: PlayerId };
 
 export interface LogEntry {

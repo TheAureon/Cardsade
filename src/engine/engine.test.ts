@@ -244,7 +244,7 @@ describe('fx events', () => {
     const fx = s.log.map((e) => e.fx).filter(Boolean);
     expect(fx).toContainEqual({ type: 'attack', from: 'p0', to: 'p1', amount: 5 });
     expect(fx).toContainEqual({ type: 'reverse', from: 'p1', to: 'p0', amount: 5 });
-    expect(fx).toContainEqual({ type: 'damage', to: 'p0', amount: 5, hp: 95 });
+    expect(fx).toContainEqual({ type: 'damage', to: 'p0', from: 'p1', amount: 5, hp: 95 });
   });
 });
 

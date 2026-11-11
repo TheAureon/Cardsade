@@ -80,6 +80,20 @@ The biggest moments cut away to short anime-style scenes. Each runs 1.3–3 seco
 
 The portraits (`src/ui/Avatar.tsx`) are painted, hand-drawn anime SVG characters. A displacement filter gives the ink lines a hand-drawn wobble with a faint second pencil pass, and a brush filter mottles the paint like gouache. Skin, hair and irises use painted gradients, and the shading, blush and highlights are soft brushwork, all over a watercolour wash and paper grain. Each character also has big glossy eyes and their own outfit and accessories. Scenes are built from these same SVG portraits, which have cutscene expressions (`intense`, `shock`, `ko`, `win`) and crops (`face`, and `eyes` for cut-in bands). The code is in `src/ui/Cutscene.tsx`, and the triggers are in `sceneFor` in `GameScreen.tsx`.
 
+## XP, achievements and progression
+
+Progress is saved in your browser (`src/progress/progression.ts` holds the rules and `src/ui/profileStore.ts` handles storage).
+
+- **XP per game:** 25 for playing, plus 1 per 2 damage dealt, 40 per K.O., 15 per special move, 10 per reverse and 8 per block. Finishing 1st earns 200, 2nd 80 and 3rd 40. A rival bonus adds 15% per extra opponent. Quitting counts only once you've been knocked out.
+- **Levels** (up to 50): each level needs 50 more XP than the last, starting at 100. The results screen tallies the game and animates the level bar, and your level and title show on the menu and on your nameplate.
+- **Achievements:** 21 medallions in bronze, silver and gold, each paying bonus XP.
+  - In-game moments pop a toast the moment they happen: First Blood, Overkill (50+ hit), Apocalypse (100+), Combo Artist (5+ cards), Multiplied (×6), Mirror Master (3 reverses), Iron Wall (3 blocks), Ping Pong (3+ reverses in one chain), Spring Cleaning (4+ cards discarded).
+  - The rest are checked when the game ends: Victor, Untouchable, Last Stand, Phoenix, Full House, Blitz, Veteran, True Crusader, Warlord, Slayer, Rising Star, Living Legend.
+- **Unlocks by level**, chosen on the Profile screen:
+  - Titles: Squire, Duelist (3), Knight (5), Champion (8), Warlord (12), Paladin (16), Legend (20), Mythic (30).
+  - Table themes: Crimson, Emerald (4), Midnight (7), Royal (10), Gold (15).
+  - Card backs: Classic, Shadow (6), Gilded (9), Ocean (14).
+
 ## Architecture (built for multiplayer)
 
 ```
