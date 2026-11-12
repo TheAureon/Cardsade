@@ -22,9 +22,47 @@ import { music } from './music';
 import { CUTSCENE_MS, Cutscene, moveName, type CutsceneSpec, type Fighter } from './Cutscene';
 import { cutscenesOn, setCutscenes, subscribeSettings } from './settings';
 import { sfx } from './sound';
-import { award as scoreMatch, grantDuring, levelInfo, newlyEarned, newMatch, track, type Achievement, type Award, type MatchStats } from '../progress/progression';
+import {
+  award as scoreMatch,
+  grantDuring,
+  hasFoil,
+  levelInfo,
+  newlyEarned,
+  newMatch,
+  track,
+  type Achievement,
+  type Award,
+  type MatchStats,
+  type XpLine,
+} from '../progress/progression';
 import { getProfile, saveProfile, subscribeProfile, titleName } from './profileStore';
 import { AchievementToast, Results } from './Progress';
+import type { Recording } from '../host/GameHost';
+import type { ModeId } from './modes';
+import { saveReplay } from './replays';
+import { Coach } from './Coach';
+
+/** How this match is played and scored. */
+export interface ScreenOptions {
+  mode: ModeId;
+  label: string;
+  /** Earn XP and achievements. */
+  track: boolean;
+  /** Watching a replay: no controls, nothing saved. */
+  readOnly?: boolean;
+  tutorial?: boolean;
+  /** Bonus XP lines for this match (story chapters, daily challenge). */
+  extraXp?: (won: boolean) => XpLine[];
+  /** Called once when the match ends, with the award when XP is tracked. */
+  onFinished?: (match: MatchStats, award: Award | null) => void;
+  /** Lets the screen save a replay when the game ends. */
+  recording?: () => Recording | null;
+}
+
+const EMOTES = ['GG', 'Nice!', 'Grr!', 'Ha ha!', 'Oops', 'Wow!', 'Bring it!', 'Sorry!'];
+const BOT_HURT = ['Grr!', 'Ouch!', 'Lucky shot.', 'Hey!'];
+const BOT_GLOAT = ['Too easy.', 'Ha ha!', 'GG!', 'Next!'];
+const BOT_REPLY = ['Bring it!', 'Ha!', 'We’ll see.', 'GG', 'Hmph.'];
 
 type NameOf = (id: PlayerId) => string;
 
@@ -40,11 +78,11 @@ function pointOf(selector: string) {
 const seatSelector = (id: PlayerId) => `[data-seat="${CSS.escape(id)}"]`;
 const seatPoint = (id: PlayerId) => pointOf(seatSelector(id));
 
-export function GameScreen({ client, onExit }: { client: GameClient; onExit: () => void }) {
+export function GameScreen({ client, onExit, options }: { client: GameClient; onExit: () => void; options: ScreenOptions }) {
   const view = useSyncExternalStore(client.subscribe, client.getView);
   const me = view.viewer;
   const pending = view.pending;
-  const myTurnToAct = pending.kind !== 'gameOver' && pending.player === me;
+  const myTurnToAct = !options.readOnly && pending.kind !== 'gameOver' && pending.player === me;
   /** Portrait/character for a seat. */
   const fighterOf = useCallback((id: PlayerId) => view.players.find((p) => p.id === id)?.fighter ?? 0, [view.players]);
   const opponents = view.players.filter((p) => p.id !== me);
@@ -371,18 +409,51 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
   const toastId = useRef(0);
 
   const finalize = useCallback(() => {
-    if (finalized.current) return null;
+    if (finalized.current || options.readOnly) return null;
     finalized.current = true;
     const hp = view.players.find((p) => p.id === me)?.hp ?? 0;
-    const scored = scoreMatch({ ...match.current, finalHp: hp }, getProfile(), xpAtStart.current, Date.now());
-    saveProfile(scored.profile);
+    const m = { ...match.current, finalHp: hp };
+    let scored: Award | null = null;
+    if (options.track) {
+      scored = scoreMatch(m, getProfile(), xpAtStart.current, Date.now(), { mode: options.mode, extra: options.extraXp?.(m.won) });
+      saveProfile(scored.profile);
+    }
+    const rec = options.recording?.();
+    if (rec && options.mode !== 'tutorial') {
+      const place = m.won ? 'Won' : m.placement ? `Finished ${m.placement}${['', 'st', 'nd', 'rd'][m.placement] ?? 'th'}` : 'Left early';
+      saveReplay({ at: Date.now(), label: options.label, summary: `${place} · ${view.players.length} players`, viewer: me, recording: rec });
+    }
+    options.onFinished?.(m, scored);
     return scored;
-  }, [view.players, me]);
+  }, [view.players, me, options]);
 
   /** Leaving mid-game counts only once you're already knocked out (your placement is final). */
   const leave = () => {
     if (!finalized.current && match.current.placement !== null) finalize();
     onExit();
+  };
+
+  // ---------- Emotes: speech bubbles over portraits; bots react ----------
+  const [emotes, setEmotes] = useState<Record<PlayerId, { text: string; key: number }>>({});
+  const [emoteOpen, setEmoteOpen] = useState(false);
+  const say = useCallback(
+    (who: PlayerId, text: string, delay = 0) => {
+      fx.later(() => {
+        const key = Date.now() + Math.random();
+        setEmotes((m) => ({ ...m, [who]: { text, key } }));
+        fx.later(() => setEmotes((m) => (m[who]?.key === key ? (({ [who]: _gone, ...rest }) => rest)(m) : m)), 2600);
+      }, delay);
+    },
+    [fx],
+  );
+  const pick = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
+  const sendEmote = (text: string) => {
+    setEmoteOpen(false);
+    say(me, text);
+    sfx.click();
+    // A rival sometimes answers back.
+    const bots = view.players.filter((p) => p.controller === 'bot' && !p.eliminated);
+    if (bots.length && Math.random() < 0.5) say(pick(bots).id, pick(BOT_REPLY), 900);
   };
 
   const lastLog = useRef(0);
@@ -392,8 +463,17 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
     for (const e of entries) {
       const fxEvent = e.fx!;
       const packet = fxEvent.type === 'attack' ? view.stack.find((p) => p.kind === 'attack' && p.from === fxEvent.from) : undefined;
-      match.current = track(match.current, fxEvent, { attackCards: packet?.cards.length, attackMultiplier: packet?.multiplier, alive });
-      for (const a of newlyEarned(match.current, getProfile())) {
+      match.current = track(match.current, fxEvent, {
+        attackCards: packet?.cards.length,
+        attackMultiplier: packet?.multiplier,
+        attackKinds: packet?.cards.map((c) => c.kind),
+        alive,
+      });
+      // Bots talk back now and then.
+      const isBot = (id: PlayerId) => view.players.find((p) => p.id === id)?.controller === 'bot';
+      if (fxEvent.type === 'damage' && fxEvent.amount >= 15 && isBot(fxEvent.to) && fxEvent.hp > 0 && Math.random() < 0.35) say(fxEvent.to, pick(BOT_HURT), 500);
+      if (fxEvent.type === 'ko' && isBot(fxEvent.by) && Math.random() < 0.5) say(fxEvent.by, pick(BOT_GLOAT), 700);
+      for (const a of options.track ? newlyEarned(match.current, getProfile()) : []) {
         const granted = grantDuring(match.current, getProfile(), a, Date.now());
         match.current = granted.match;
         saveProfile(granted.profile);
@@ -458,6 +538,11 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
         </span>
         <span className="hud-actions">
           <AudioToggles />
+          {!options.readOnly && (
+            <button type="button" className="btn ghost" aria-expanded={emoteOpen} onClick={() => setEmoteOpen((o) => !o)}>
+              Emote
+            </button>
+          )}
           <button
             type="button"
             className="btn ghost"
@@ -473,7 +558,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
             Log
           </button>
           <button type="button" className="btn ghost" onClick={leave}>
-            Quit
+            {options.readOnly ? 'Exit replay' : 'Quit'}
           </button>
         </span>
       </header>
@@ -512,6 +597,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
                 isTarget={target === p.id}
                 targetable={myTurnToAct && pending.kind === 'main' && !p.eliminated && !isAlly(p)}
                 ally={isAlly(p)}
+                emote={emotes[p.id]}
                 onClick={() => {
                   setTarget(p.id);
                   sfx.click();
@@ -565,14 +651,21 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
             <div className={`portrait-wrap${view.turn.player === me ? ' active' : ''}`} data-seat={me}>
               <Avatar seed={self.fighter} />
               <HitBurst hp={self.hp} />
+              {emotes[me] && (
+                <span className="emote-bubble" key={emotes[me].key}>
+                  {emotes[me].text}
+                </span>
+              )}
               <span className="count-badge">{view.hand.length}</span>
               {myTurnToAct && <span className="splat">!</span>}
             </div>
             <div className="me-info">
               <span className="nameplate">{self.name}</span>
-              <span className="level-chip">
-                Lv {levelInfo(profile.xp).level} · {titleName(profile)}
-              </span>
+              {options.track && (
+                <span className="level-chip">
+                  Lv {levelInfo(profile.xp).level} · {titleName(profile)}
+                </span>
+              )}
               <HpBar hp={self.hp} max={self.maxHp} />
               {view.config.ultimates && !self.eliminated && <ChargeBar charge={self.charge} />}
               <StatusBadges player={self} />
@@ -605,6 +698,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
                   selected={selected.includes(c.id)}
                   disabled={!selectable(c)}
                   dim={myTurnToAct && !selectable(c)}
+                  foil={profile.showFoils && hasFoil(profile, c.kind)}
                   onClick={() => toggle(c.id)}
                 />
               </div>
@@ -614,6 +708,18 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
       </div>
 
       <FxLayer items={fx.items} />
+
+      {emoteOpen && (
+        <div className="emote-picker" role="menu">
+          {EMOTES.map((e) => (
+            <button key={e} type="button" className="btn" role="menuitem" onClick={() => sendEmote(e)}>
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {options.tutorial && <Coach view={view} target={target} selected={selectedCards} />}
 
       {scenes[0] && (
         <Cutscene
@@ -703,9 +809,10 @@ function Seat(props: {
   isTarget: boolean;
   targetable: boolean;
   ally: boolean;
+  emote?: { text: string; key: number };
   onClick: () => void;
 }) {
-  const { player, seed, view, angle, index, isTarget, targetable, ally, onClick } = props;
+  const { player, seed, view, angle, index, isTarget, targetable, ally, emote, onClick } = props;
   const active = view.turn.player === player.id;
   const deciding = view.pending.kind !== 'gameOver' && view.pending.player === player.id;
   const fan = Math.min(player.handCount, 9);
@@ -741,6 +848,11 @@ function Seat(props: {
           <span className={`portrait-wrap${active ? ' active' : ''}`} data-seat={player.id}>
             <Avatar seed={seed} />
             <HitBurst hp={player.hp} />
+            {emote && (
+              <span className="emote-bubble" key={emote.key}>
+                {emote.text}
+              </span>
+            )}
             <span className="count-badge">{player.handCount}</span>
             {deciding && <span className="splat">!</span>}
             {isTarget && <span className="crosshair" />}

@@ -7,6 +7,8 @@ interface Props {
   selected?: boolean;
   disabled?: boolean;
   dim?: boolean;
+  /** Holographic foil finish (earned by using a card kind often). */
+  foil?: boolean;
   /** Card width in px; everything inside scales with it. */
   width?: number;
   onClick?: () => void;
@@ -57,7 +59,7 @@ function tint(card: Card): string {
   return card.value <= 3 ? 'num-green' : card.value <= 6 ? 'num-blue' : 'num-yellow';
 }
 
-export function CardView({ card, selected, disabled, dim, width, onClick, style, className }: Props) {
+export function CardView({ card, selected, disabled, dim, foil, width, onClick, style, className }: Props) {
   const info = CARD_INFO[card.kind];
   const isNum = card.kind === 'number';
   const isMult = card.kind === 'multiplier';
@@ -66,7 +68,7 @@ export function CardView({ card, selected, disabled, dim, width, onClick, style,
   return (
     <button
       type="button"
-      className={`card t-${tint(card)}${selected ? ' selected' : ''}${dim ? ' dim' : ''}${className ? ` ${className}` : ''}`}
+      className={`card t-${tint(card)}${selected ? ' selected' : ''}${dim ? ' dim' : ''}${foil ? ' foil' : ''}${className ? ` ${className}` : ''}`}
       disabled={disabled}
       onClick={onClick}
       onPointerMove={tilt}

@@ -4,7 +4,7 @@
  * between visits. Also applies the chosen table theme and card back as CSS
  * variables on the page.
  */
-import { BACKS, levelInfo, newProfile, TABLES, TITLES, type Profile } from '../progress/progression';
+import { BACKS, isUnlocked, newProfile, TABLES, TITLES, type Profile } from '../progress/progression';
 
 const KEY = 'cardsade-profile';
 const listeners = new Set<() => void>();
@@ -14,7 +14,11 @@ let profile: Profile = load();
 function load(): Profile {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...newProfile(), ...JSON.parse(raw) };
+    if (raw) {
+      const saved = JSON.parse(raw);
+      const base = newProfile();
+      return { ...base, ...saved, season: { ...base.season, ...saved.season } };
+    }
   } catch {
     // Blocked or corrupt storage: start fresh.
   }
@@ -45,7 +49,7 @@ export function subscribeProfile(listener: () => void) {
 export function choose(kind: 'title' | 'table' | 'back', id: string) {
   const list = kind === 'title' ? TITLES : kind === 'table' ? TABLES : BACKS;
   const item = list.find((u) => u.id === id);
-  if (!item || item.level > levelInfo(profile.xp).level) return;
+  if (!item || !isUnlocked(profile, item)) return;
   saveProfile({ ...profile, [kind]: id });
 }
 
@@ -60,6 +64,8 @@ const TABLE_VARS: Record<string, [string, string, string, string, string]> = {
   midnight: ['#5a8dff', '#1d3fa8', '#142d7a', '#0a1840', '#162a6e'],
   royal: ['#c08aff', '#6a2dbb', '#4d1f8a', '#2a1050', '#4a1d80'],
   gold: ['#ffe27a', '#d9a514', '#a87a08', '#5e4304', '#8a6406'],
+  aurora: ['#7affd8', '#1aa89a', '#4a3aa8', '#1a1050', '#2a6a8a'],
+  obsidian: ['#ff4d5e', '#2a2a32', '#16161c', '#050508', '#3a0a14'],
 };
 
 /** Card-back stripes and logo colour. */
@@ -68,7 +74,14 @@ const BACK_VARS: Record<string, [string, string, string]> = {
   shadow: ['#3a1f63', '#160a2a', '#c48cff'],
   gilded: ['#e0a812', '#9a6c02', '#fff6c0'],
   ocean: ['#1f7ae0', '#0b3c80', '#8ff0ff'],
+  neon: ['#ff3dc8', '#1a0a3a', '#3dfff0'],
+  prism: ['#ff5a5a', '#5a7aff', '#ffffff'],
 };
+
+/** Merge-and-save helper for small profile updates. */
+export function updateProfile(change: (p: Profile) => Profile) {
+  saveProfile(change(profile));
+}
 
 export function applyCosmetics(p: Profile = profile) {
   const root = document.documentElement.style;

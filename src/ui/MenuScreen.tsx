@@ -30,11 +30,13 @@ export function MenuScreen({
   onPlay,
   onTitle,
   onProfile,
+  onStats,
 }: {
   cast: string[];
   onPlay: () => void;
   onTitle: () => void;
   onProfile: () => void;
+  onStats: () => void;
 }) {
   const profile = useSyncExternalStore(subscribeProfile, getProfile);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -121,6 +123,17 @@ export function MenuScreen({
             }}
           >
             How to play
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              unlockAudio();
+              sfx.click();
+              onStats();
+            }}
+          >
+            Stats & replays
           </button>
           <AudioToggles className="btn" />
         </div>
