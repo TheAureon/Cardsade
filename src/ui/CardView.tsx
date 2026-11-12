@@ -40,6 +40,9 @@ const GLYPHS: Partial<Record<Card['kind'], string>> = {
   discardAction: '✕',
   discardAttack: '✕',
   discardMultipliers: '✕',
+  fire: '♨',
+  ice: '❄',
+  lightning: 'ϟ',
 };
 
 const SUB: Partial<Record<Card['kind'], string>> = {
@@ -106,6 +109,9 @@ export function CardBack({ width, style }: { width?: number; style?: CSSProperti
 const KIND_ORDER: Card['kind'][] = [
   'number',
   'multiplier',
+  'fire',
+  'ice',
+  'lightning',
   'block',
   'reverse',
   'skip',

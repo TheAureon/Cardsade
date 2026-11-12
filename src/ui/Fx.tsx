@@ -20,8 +20,8 @@ export type FxItem = { id: number } & (
   | { kind: 'projectile'; x1: number; y1: number; x2: number; y2: number; variant: ProjectileVariant; label?: string }
   | { kind: 'stamp'; x: number; y: number; text: string; variant: StampVariant; big?: boolean }
   | { kind: 'particles'; x: number; y: number; pieces: Piece[] }
-  | { kind: 'float'; x: number; y: number; text: string; variant: 'damage' | 'info' }
-  | { kind: 'banner'; text: string; variant: 'turn' | 'incoming' }
+  | { kind: 'float'; x: number; y: number; text: string; variant: 'damage' | 'info' | 'heal' }
+  | { kind: 'banner'; text: string; variant: 'turn' | 'incoming' | 'event' }
   | { kind: 'flash' }
   | { kind: 'confetti'; pieces: Piece[] }
 );
@@ -33,6 +33,9 @@ export const PALETTES = {
   block: ['#ffffff', '#c9d3dd', '#9fb0c0', '#ffd21f'],
   magic: ['#b98aff', '#7a3fd0', '#ffffff', '#29b6e8'],
   party: ['#ffd21f', '#e0263a', '#1f7ae0', '#2bb24c', '#ff8a00', '#ffffff'],
+  fire: ['#ffd21f', '#ff8a00', '#ff3b1f', '#fff1a8'],
+  ice: ['#e6f7ff', '#8fd3ff', '#3fa9f5', '#ffffff'],
+  heal: ['#9dffb0', '#2bb24c', '#ffffff', '#d6ffe0'],
 };
 
 /** Random burst geometry, made once when the effect is created. */

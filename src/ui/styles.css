@@ -3949,3 +3949,139 @@ summary:focus-visible {
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   }
 }
+
+/* ---------- Elements, ultimates, statuses, events ---------- */
+.t-fire {
+  --c: #ff6a1f;
+}
+.t-fire .card-oval {
+  background: radial-gradient(circle at 50% 70%, #fff1a8, #ffd21f 35%, #ff8a00 70%);
+}
+.t-ice {
+  --c: #3fa9f5;
+}
+.t-ice .card-oval {
+  background: radial-gradient(circle at 40% 35%, #ffffff, #d6f2ff 55%, #8fd3ff);
+}
+.t-lightning {
+  --c: #6a3db8;
+}
+.t-lightning .card-oval {
+  background: radial-gradient(circle at 50% 40%, #fffbd0, #ffe55c 50%, #ffd21f);
+}
+.t-fire .card-glyph,
+.t-ice .card-glyph,
+.t-lightning .card-glyph {
+  color: var(--c);
+}
+.charge {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 130px;
+  height: 10px;
+  background: #1a0a2a;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.charge-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #7a3fd0, #c48cff);
+  transition: width 0.4s ease;
+}
+.charge.full .charge-fill {
+  background: linear-gradient(90deg, #ffd21f, #ff8a00, #ffd21f);
+  background-size: 200% 100%;
+  animation: rainbow 1s linear infinite;
+}
+.charge.full {
+  box-shadow: 0 0 10px 2px rgba(255, 210, 31, 0.8);
+}
+.charge-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--paper);
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+}
+.btn.ult-btn {
+  color: var(--ink);
+  background: linear-gradient(90deg, #ffd21f, #ff8a00, #ffd21f);
+  background-size: 200% 100%;
+  animation: rainbow 1.2s linear infinite, ready-glow 0.8s ease-in-out infinite;
+}
+.badge.burn {
+  color: var(--paper);
+  background: #ff5a1f;
+}
+.badge.frozen {
+  color: var(--ink);
+  background: #bfe8ff;
+}
+.badge.shield {
+  color: var(--ink);
+  background: #dfe6ee;
+}
+.badge.boss {
+  color: var(--paper);
+  background: #111;
+  border-color: var(--gold);
+}
+.badge.ally {
+  color: var(--ink);
+  background: #7dffb0;
+}
+.seat.ally .nameplate {
+  background: linear-gradient(90deg, #138a4a, #2bd47a 60%, rgba(43, 212, 122, 0));
+}
+.seat.boss .portrait-wrap {
+  width: 116px;
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 0 0 7px #111,
+    0 0 26px 8px rgba(255, 40, 40, 0.65);
+}
+.event-pill {
+  justify-self: center;
+  display: grid;
+  justify-items: center;
+  max-width: min(100%, 560px);
+  padding: 0.35em 1.2em;
+  text-align: center;
+  color: var(--ink);
+  background: var(--gold);
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 var(--ink);
+  transform: rotate(-1deg);
+  animation: pop-in 0.4s var(--spring);
+}
+.event-pill b {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.15rem;
+  letter-spacing: 0.05em;
+}
+.event-pill span {
+  font-size: 0.8rem;
+}
+.fx-float.v-heal {
+  color: #5bff8a;
+  font-size: 2.2rem;
+}
+.fx-banner.v-event::before {
+  background: repeating-linear-gradient(-45deg, #2a0a4a 0 26px, #6a3db8 26px 52px);
+  border-color: var(--gold);
+}
+.cs-ult-word {
+  font-size: clamp(3rem, 14vw, 9rem);
+  -webkit-text-stroke-color: #ffd21f;
+  text-shadow: 0 0 0.3em rgba(255, 210, 31, 0.9);
+}

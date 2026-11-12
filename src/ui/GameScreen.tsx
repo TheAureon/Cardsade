@@ -8,7 +8,8 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { CARD_INFO, cardLabel, INITIATOR_KINDS } from '../engine/cards';
+import { CARD_INFO, cardLabel, INITIATOR_KINDS, isAttackCard } from '../engine/cards';
+import { ultimateFor, WILD_EVENT_BY_KIND } from '../engine/abilities';
 import { describePacket, packetDamage } from '../engine/engine';
 import type { Action, Card, FxEvent, Packet, PlayerId, PlayerView, PublicPlayer } from '../engine/types';
 import type { GameClient } from '../host/GameHost';
@@ -44,9 +45,11 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
   const me = view.viewer;
   const pending = view.pending;
   const myTurnToAct = pending.kind !== 'gameOver' && pending.player === me;
-  const seatIndex = (id: PlayerId) => view.players.findIndex((p) => p.id === id);
+  /** Portrait/character for a seat. */
+  const fighterOf = useCallback((id: PlayerId) => view.players.find((p) => p.id === id)?.fighter ?? 0, [view.players]);
   const opponents = view.players.filter((p) => p.id !== me);
   const self = view.players.find((p) => p.id === me)!;
+  const myTeam = self.team;
   const nameOf: NameOf = (id) => (id === me ? 'You' : view.players.find((p) => p.id === id)!.name);
 
   const [selected, setSelected] = useState<string[]>([]);
@@ -66,7 +69,8 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
   }, [decisionKey]);
 
   // Keep the target valid; auto-pick when there's only one choice.
-  const alive = opponents.filter((p) => !p.eliminated);
+  const isAlly = (p: PublicPlayer) => p.team !== null && p.team === self.team;
+  const alive = opponents.filter((p) => !p.eliminated && !isAlly(p));
   useEffect(() => {
     if (target && !alive.some((p) => p.id === target)) setTarget(null);
     if (!target && alive.length === 1) setTarget(alive[0].id);
@@ -89,7 +93,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
 
   const selectable = (c: Card): boolean => {
     if (!myTurnToAct) return false;
-    if (pending.kind === 'main') return c.kind === 'number' || c.kind === 'multiplier' || INITIATOR_KINDS.includes(c.kind);
+    if (pending.kind === 'main') return isAttackCard(c) || INITIATOR_KINDS.includes(c.kind);
     if (pending.kind === 'response') return pending.packet.kind === 'attack' && c.kind === 'multiplier';
     return false;
   };
@@ -232,17 +236,70 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
             later(() => music.sting('ko'), d);
           }
           break;
-        case 'win':
-          if (e.who === me && !reduced) add(makeConfetti(), 4200, d + 200);
+        case 'win': {
+          const mine = e.who === me || (e.team !== null && e.team === myTeam);
+          if (mine && !reduced) add(makeConfetti(), 4200, d + 200);
           later(() => {
             // The music sting is the fanfare; fall back to the effect version when music is off.
-            if (isMuted('music')) (e.who === me ? sfx.win : sfx.lose)();
-            music.sting(e.who === me ? 'win' : 'lose');
+            if (isMuted('music')) (mine ? sfx.win : sfx.lose)();
+            music.sting(mine ? 'win' : 'lose');
           }, d + 200);
+          break;
+        }
+        case 'burn':
+          stamp(e.who, 'BURN!', 'hit');
+          burst(e.who, 20, 80, PALETTES.fire);
+          later(sfx.zap, d);
+          break;
+        case 'freeze':
+          stamp(e.who, 'FROZEN!', 'block');
+          burst(e.who, 20, 80, PALETTES.ice);
+          later(sfx.block, d);
+          break;
+        case 'frozen':
+          stamp(e.who, 'FROZEN!', 'block');
+          later(sfx.skip, d);
+          break;
+        case 'chain':
+          fly(e.from, e.to, 'skip', 'ϟ', d);
+          later(sfx.zap, d);
+          break;
+        case 'ultimate':
+          if (!scene) stamp(e.who, ultimateFor(fighterOf(e.who)).name.toUpperCase() + '!', 'ko', true);
+          burst(e.who, 30, 140, PALETTES.party);
+          later(() => shake(10), d);
+          if (!scene) later(sfx.start, d);
+          break;
+        case 'heal': {
+          const p = seatPoint(e.who);
+          add({ kind: 'float', x: p.x, y: p.y - 20, text: `+${e.amount}`, variant: 'heal' }, 1100, d);
+          burst(e.who, 14, 70, PALETTES.heal);
+          later(sfx.draw, d);
+          break;
+        }
+        case 'steal':
+          for (let k = 0; k < Math.min(e.count, 3); k++) fly(e.from, e.to, 'draw', undefined, d + k * 110);
+          later(sfx.zap, d);
+          break;
+        case 'shielded':
+          stamp(e.who, 'BULWARK!', 'block');
+          burst(e.who, 18, 90, PALETTES.block);
+          later(sfx.block, d);
+          break;
+        case 'rage':
+          stamp(e.who, 'RAGE!', 'ko', true);
+          later(() => shake(20), d);
+          later(sfx.ko, d);
+          break;
+        case 'event':
+          if (e.active) {
+            add({ kind: 'banner', text: WILD_EVENT_BY_KIND[e.kind].name.toUpperCase() + '!', variant: 'event' }, 1600, d);
+            later(sfx.incoming, d);
+          }
           break;
       }
     },
-    [fx, me, shake, jolt],
+    [fx, me, myTeam, shake, jolt, fighterOf],
   );
 
   // ---------- Soundtrack: battle theme, hotter when things get dangerous ----------
@@ -269,7 +326,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
   const fighter = useCallback(
     (id: PlayerId): Fighter => {
       const i = view.players.findIndex((p) => p.id === id);
-      return { id, name: view.players[i].name, seed: i };
+      return { id, name: view.players[i].name, seed: view.players[i].fighter };
     },
     [view.players],
   );
@@ -294,7 +351,9 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
       case 'ko':
         return { kind: 'ko', who: fighter(e.who) };
       case 'win':
-        return { kind: 'victory', winner: fighter(e.who), mine: e.who === me };
+        return { kind: 'victory', winner: fighter(e.who), mine: e.who === me || (e.team !== null && e.team === self.team) };
+      case 'ultimate':
+        return { kind: 'ultimate', who: fighter(e.who), name: ultimateFor(fighterOf(e.who)).name, target: e.target ? fighter(e.target) : null };
       default:
         return null;
     }
@@ -302,7 +361,9 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
 
   // ---------- Progression: track this match, pay out achievements and XP ----------
   const profile = useSyncExternalStore(subscribeProfile, getProfile);
-  const match = useRef<MatchStats>(newMatch(me, view.players.length - 1, view.config.startingHp));
+  const match = useRef<MatchStats>(
+    newMatch(me, view.players.filter((p) => !(p.team !== null && p.team === self.team)).length - 1, self.maxHp, self.team),
+  );
   const xpAtStart = useRef(getProfile().xp);
   const finalized = useRef(false);
   const [result, setResult] = useState<Award | null>(null);
@@ -423,6 +484,13 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
         </div>
       )}
 
+      {view.event && (
+        <div className="event-pill" key={view.event.kind} title={WILD_EVENT_BY_KIND[view.event.kind].description}>
+          <b>Wild event: {WILD_EVENT_BY_KIND[view.event.kind].name}</b>
+          <span>{WILD_EVENT_BY_KIND[view.event.kind].description}</span>
+        </div>
+      )}
+
       <div className="board" ref={boardRef}>
         <section className="stage" style={{ '--n': view.players.length } as CSSProperties}>
           <div className="table">
@@ -437,12 +505,13 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
               <Seat
                 key={p.id}
                 player={p}
-                seed={seatIndex(p.id)}
+                seed={p.fighter}
                 view={view}
                 angle={angle}
                 index={i}
                 isTarget={target === p.id}
-                targetable={myTurnToAct && pending.kind === 'main' && !p.eliminated}
+                targetable={myTurnToAct && pending.kind === 'main' && !p.eliminated && !isAlly(p)}
+                ally={isAlly(p)}
                 onClick={() => {
                   setTarget(p.id);
                   sfx.click();
@@ -494,7 +563,7 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
         <section className="player">
           <div className="me">
             <div className={`portrait-wrap${view.turn.player === me ? ' active' : ''}`} data-seat={me}>
-              <Avatar seed={seatIndex(me)} />
+              <Avatar seed={self.fighter} />
               <HitBurst hp={self.hp} />
               <span className="count-badge">{view.hand.length}</span>
               {myTurnToAct && <span className="splat">!</span>}
@@ -504,11 +573,9 @@ export function GameScreen({ client, onExit }: { client: GameClient; onExit: () 
               <span className="level-chip">
                 Lv {levelInfo(profile.xp).level} · {titleName(profile)}
               </span>
-              <HpBar hp={self.hp} max={view.config.startingHp} />
-              <span className="badges">
-                {self.skipped && <span className="badge skipped">Skipped</span>}
-                {self.eliminated && <span className="badge out">K.O.</span>}
-              </span>
+              <HpBar hp={self.hp} max={self.maxHp} />
+              {view.config.ultimates && !self.eliminated && <ChargeBar charge={self.charge} />}
+              <StatusBadges player={self} />
             </div>
             <div className="controls">
               {myTurnToAct && (
@@ -635,9 +702,10 @@ function Seat(props: {
   index: number;
   isTarget: boolean;
   targetable: boolean;
+  ally: boolean;
   onClick: () => void;
 }) {
-  const { player, seed, view, angle, index, isTarget, targetable, onClick } = props;
+  const { player, seed, view, angle, index, isTarget, targetable, ally, onClick } = props;
   const active = view.turn.player === player.id;
   const deciding = view.pending.kind !== 'gameOver' && view.pending.player === player.id;
   const fan = Math.min(player.handCount, 9);
@@ -662,7 +730,7 @@ function Seat(props: {
       </span>
       <button
         type="button"
-        className={`seat${isTarget ? ' targeted' : ''}${player.eliminated ? ' out' : ''}${active ? ' active' : ''}`}
+        className={`seat${isTarget ? ' targeted' : ''}${player.eliminated ? ' out' : ''}${active ? ' active' : ''}${ally ? ' ally' : ''}${player.boss ? ' boss' : ''}`}
         style={geo}
         disabled={!targetable}
         onClick={onClick}
@@ -678,14 +746,37 @@ function Seat(props: {
             {isTarget && <span className="crosshair" />}
           </span>
           <span className="nameplate">{player.name}</span>
-          <HpBar hp={player.hp} max={view.config.startingHp} />
-          <span className="badges">
-            {player.skipped && <span className="badge skipped">Skipped</span>}
-            {player.eliminated && <span className="badge out">K.O.</span>}
-          </span>
+          <HpBar hp={player.hp} max={player.maxHp} />
+          {view.config.ultimates && !player.eliminated && <ChargeBar charge={player.charge} />}
+          <StatusBadges player={player} ally={ally} />
         </span>
       </button>
     </>
+  );
+}
+
+/** Ultimate meter: fills from damage dealt and taken; glows when ready. */
+function ChargeBar({ charge }: { charge: number }) {
+  return (
+    <span className={`charge${charge >= 100 ? ' full' : ''}`} role="meter" aria-valuenow={charge} aria-valuemin={0} aria-valuemax={100} aria-label="Ultimate">
+      <span className="charge-fill" style={{ width: `${charge}%` }} />
+      <span className="charge-text">{charge >= 100 ? 'ULT READY' : 'ULT'}</span>
+    </span>
+  );
+}
+
+/** Small chips for every status a player can have. */
+function StatusBadges({ player, ally = false }: { player: PublicPlayer; ally?: boolean }) {
+  return (
+    <span className="badges">
+      {player.boss && <span className="badge boss">Boss</span>}
+      {ally && <span className="badge ally">Ally</span>}
+      {player.skipped && <span className="badge skipped">Skipped</span>}
+      {player.burn > 0 && <span className="badge burn">♨ {player.burn}</span>}
+      {player.frozen && <span className="badge frozen">❄ Frozen</span>}
+      {player.shield > 0 && <span className="badge shield">⛨ {player.shield}</span>}
+      {player.eliminated && <span className="badge out">K.O.</span>}
+    </span>
   );
 }
 
@@ -833,15 +924,31 @@ function Controls(props: {
   );
 
   if (p.kind === 'main') {
-    const attackCards = selectedCards.filter((c) => c.kind === 'number' || c.kind === 'multiplier');
-    const actionCards = selectedCards.filter((c) => c.kind !== 'number' && c.kind !== 'multiplier');
+    const attackCards = selectedCards.filter(isAttackCard);
+    const actionCards = selectedCards.filter((c) => !isAttackCard(c));
     const numbers = attackCards.filter((c) => c.kind === 'number').reduce((s, c) => s + c.value, 0);
     const mult = attackCards.filter((c) => c.kind === 'multiplier').reduce((m, c) => m * c.value, 1);
-    const dmg = (view.config.baseDamage + numbers) * mult;
+    // Same formula as the engine, including any wild event in force.
+    const dmg = packetDamage(view, { id: 0, kind: 'attack', from: me, to: me, origin: me, cards: [], numbers, multiplier: mult, elements: [] });
     const t = target ? nameOf(target) : null;
     const h = hype(dmg);
+    const self = view.players.find((x) => x.id === me)!;
+    const ult = ultimateFor(self.fighter);
+    const ultReady = view.config.ultimates && self.charge >= 100;
     return (
       <>
+        {ultReady && (
+          <button
+            type="button"
+            className="btn ult-btn"
+            disabled={ult.targeted && !target}
+            title={ult.description}
+            onClick={() => send({ type: 'ultimate', player: me, target: ult.targeted ? target! : undefined })}
+          >
+            ★ {ult.name}
+            {ult.targeted && t ? ` → ${t}` : ''}
+          </button>
+        )}
         {actionCards.length === 1 && attackCards.length === 0 ? (
           <button
             type="button"

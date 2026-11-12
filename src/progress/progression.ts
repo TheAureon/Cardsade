@@ -4,7 +4,7 @@
  * engine's FxEvents from the local player's point of view, then scored once
  * at the end with `award`.
  */
-import type { FxEvent, PlayerId } from '../engine/types';
+import type { CardKind, FxEvent, PlayerId } from '../engine/types';
 
 // ---------- Levels ----------
 
@@ -46,7 +46,12 @@ export interface Unlock {
   id: string;
   name: string;
   level: number;
+  /** Season rewards can't be reached by level; only by the season track. */
+  season?: boolean;
 }
+
+/** Levels can't reach season items. */
+const SEASON_ONLY = 999;
 
 export const TITLES: Unlock[] = [
   { id: 'squire', name: 'Squire', level: 1 },
@@ -57,6 +62,9 @@ export const TITLES: Unlock[] = [
   { id: 'paladin', name: 'Paladin', level: 16 },
   { id: 'legend', name: 'Legend', level: 20 },
   { id: 'mythic', name: 'Mythic', level: 30 },
+  { id: 'seasoned', name: 'Seasoned', level: SEASON_ONLY, season: true },
+  { id: 'season_hero', name: 'Season Hero', level: SEASON_ONLY, season: true },
+  { id: 'season_legend', name: 'Season Legend', level: SEASON_ONLY, season: true },
 ];
 
 export const TABLES: Unlock[] = [
@@ -65,6 +73,8 @@ export const TABLES: Unlock[] = [
   { id: 'midnight', name: 'Midnight', level: 7 },
   { id: 'royal', name: 'Royal', level: 10 },
   { id: 'gold', name: 'Gold', level: 15 },
+  { id: 'aurora', name: 'Aurora', level: SEASON_ONLY, season: true },
+  { id: 'obsidian', name: 'Obsidian', level: SEASON_ONLY, season: true },
 ];
 
 export const BACKS: Unlock[] = [
@@ -72,6 +82,8 @@ export const BACKS: Unlock[] = [
   { id: 'shadow', name: 'Shadow', level: 6 },
   { id: 'gilded', name: 'Gilded', level: 9 },
   { id: 'ocean', name: 'Ocean', level: 14 },
+  { id: 'neon', name: 'Neon', level: SEASON_ONLY, season: true },
+  { id: 'prism', name: 'Prism', level: SEASON_ONLY, season: true },
 ];
 
 /** Everything that unlocks when going from level `from` to level `to`. */
@@ -80,6 +92,68 @@ export function unlocksBetween(from: number, to: number): { kind: 'Title' | 'Tab
     list.filter((u) => u.level > from && u.level <= to).map((item) => ({ kind, item }));
   return [...pick('Title', TITLES), ...pick('Table', TABLES), ...pick('Card back', BACKS)];
 }
+
+/** Whether a profile may use a cosmetic: reached by level, or won from a season. */
+export function isUnlocked(p: Profile, item: Unlock): boolean {
+  return item.season ? p.owned.includes(item.id) : levelInfo(p.xp).level >= item.level;
+}
+
+// ---------- Seasons ----------
+
+export const SEASON_TIERS = 30;
+export const XP_PER_TIER = 250;
+
+/** One season per calendar month, e.g. "2026-11". */
+export function seasonId(now: number): string {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function seasonTier(xp: number): number {
+  return Math.min(SEASON_TIERS, Math.floor(xp / XP_PER_TIER));
+}
+
+/** Rewards on the season track, by tier. */
+export const SEASON_REWARDS: { tier: number; kind: 'Title' | 'Table' | 'Card back'; id: string }[] = [
+  { tier: 5, kind: 'Title', id: 'seasoned' },
+  { tier: 10, kind: 'Table', id: 'aurora' },
+  { tier: 15, kind: 'Card back', id: 'neon' },
+  { tier: 20, kind: 'Title', id: 'season_hero' },
+  { tier: 25, kind: 'Table', id: 'obsidian' },
+  { tier: 30, kind: 'Card back', id: 'prism' },
+  { tier: 30, kind: 'Title', id: 'season_legend' },
+];
+
+export function seasonRewardItem(r: (typeof SEASON_REWARDS)[number]): Unlock {
+  const list = r.kind === 'Title' ? TITLES : r.kind === 'Table' ? TABLES : BACKS;
+  return list.find((u) => u.id === r.id)!;
+}
+
+// ---------- Foils ----------
+
+/** Uses of a card kind needed to earn its foil. */
+export const FOIL_USES = 15;
+
+export function hasFoil(p: Profile, kind: CardKind): boolean {
+  return (p.cardUses[kind] ?? 0) >= FOIL_USES;
+}
+
+// ---------- History ----------
+
+export interface MatchRecord {
+  at: number;
+  mode: string;
+  opponents: number;
+  placement: number | null;
+  won: boolean;
+  damage: number;
+  taken: number;
+  kos: number;
+  turns: number;
+  xp: number;
+}
+
+export const HISTORY_LIMIT = 50;
 
 // ---------- Profile ----------
 
@@ -95,6 +169,17 @@ export interface Profile {
   title: string;
   table: string;
   back: string;
+  /** Crusade chapters cleared. */
+  story: number;
+  /** Best daily-challenge score per date key (YYYY-MM-DD). */
+  daily: Record<string, number>;
+  history: MatchRecord[];
+  /** How many times you've used each card kind (for foils). */
+  cardUses: Partial<Record<CardKind, number>>;
+  showFoils: boolean;
+  season: { id: string; xp: number };
+  /** Season rewards you own. */
+  owned: string[];
 }
 
 export function newProfile(): Profile {
@@ -109,6 +194,13 @@ export function newProfile(): Profile {
     title: 'squire',
     table: 'crimson',
     back: 'classic',
+    story: 0,
+    daily: {},
+    history: [],
+    cardUses: {},
+    showFoils: true,
+    season: { id: '', xp: 0 },
+    owned: [],
   };
 }
 
@@ -140,6 +232,8 @@ export interface MatchStats {
   won: boolean;
   /** Achievements already unlocked mid-match (and their XP already paid). */
   unlockedDuring: string[];
+  /** Cards you played this match, by kind. */
+  cardUses: Partial<Record<CardKind, number>>;
   // Internal bookkeeping for chains and discards.
   chainReverses: number;
   chainHasMe: boolean;
@@ -168,6 +262,7 @@ export function newMatch(me: PlayerId, opponents: number, startHp: number, team:
     placement: null,
     won: false,
     unlockedDuring: [],
+    cardUses: {},
     chainReverses: 0,
     chainHasMe: false,
     discardTarget: null,
@@ -178,6 +273,8 @@ export function newMatch(me: PlayerId, opponents: number, startHp: number, team:
 export interface TrackContext {
   /** For an attack: how many cards rode on it and its total multiplier. */
   attackCards?: number;
+  /** For an attack: the kinds of the cards on it. */
+  attackKinds?: CardKind[];
   attackMultiplier?: number;
   /** Players still standing after this event. */
   alive?: number;
@@ -187,8 +284,9 @@ const DISCARD_CARDS = new Set(['discard', 'discardAction', 'discardAttack', 'dis
 
 /** Folds one engine event into the match stats (returns a new object). */
 export function track(stats: MatchStats, e: FxEvent, ctx: TrackContext = {}): MatchStats {
-  const s = { ...stats, unlockedDuring: [...stats.unlockedDuring] };
+  const s = { ...stats, unlockedDuring: [...stats.unlockedDuring], cardUses: { ...stats.cardUses } };
   const me = s.me;
+  const used = (kind: CardKind) => (s.cardUses[kind] = (s.cardUses[kind] ?? 0) + 1);
   switch (e.type) {
     case 'attack':
       s.chainReverses = 0;
@@ -198,23 +296,32 @@ export function track(stats: MatchStats, e: FxEvent, ctx: TrackContext = {}): Ma
         if (e.amount >= 30 || mult >= 3) s.specials++;
         s.maxCardsInAttack = Math.max(s.maxCardsInAttack, ctx.attackCards ?? 0);
         s.maxMultiplier = Math.max(s.maxMultiplier, mult);
+        for (const k of ctx.attackKinds ?? []) used(k);
       }
       break;
     case 'action':
       s.chainReverses = 0;
       s.chainHasMe = e.from === me || e.to === me;
       if (e.from === me && DISCARD_CARDS.has(e.card)) s.discardTarget = e.to;
+      if (e.from === me) used(e.card);
       break;
     case 'reverse':
       s.chainReverses++;
       if (e.from === me) {
         s.reverses++;
         s.chainHasMe = true;
+        used('reverse');
       }
       if (s.chainHasMe) s.longestChain = Math.max(s.longestChain, s.chainReverses);
       break;
     case 'block':
-      if (e.by === me) s.blocks++;
+      if (e.by === me) {
+        s.blocks++;
+        used('block');
+      }
+      break;
+    case 'skipCounter':
+      if (e.from === me) used('skip');
       break;
     case 'damage':
       if (e.from === me && e.to !== me) {
@@ -315,6 +422,12 @@ export interface XpLine {
 }
 
 export interface Award {
+  /** Season track before and after this match. */
+  seasonBefore: number;
+  seasonAfter: number;
+  seasonRewards: Unlock[];
+  /** Foils earned this match. */
+  newFoils: CardKind[];
   lines: XpLine[];
   total: number;
   /** All achievements unlocked this match, mid-match ones included. */
@@ -334,7 +447,13 @@ const PLACE_XP: Record<number, number> = { 1: 200, 2: 80, 3: 40 };
  * profile XP when the match began, so the results can show the whole climb,
  * including mid-match achievement XP that was already paid.
  */
-export function award(m: MatchStats, before: Profile, xpAtStart: number, now: number): Award {
+export function award(
+  m: MatchStats,
+  before: Profile,
+  xpAtStart: number,
+  now: number,
+  options: { mode?: string; extra?: XpLine[] } = {},
+): Award {
   const lines: XpLine[] = [{ label: 'Battle fought', xp: 25 }];
   const add = (label: string, xp: number) => xp > 0 && lines.push({ label, xp });
   add(`Damage dealt (${m.damageDealt})`, Math.floor(m.damageDealt / 2));
@@ -346,10 +465,12 @@ export function award(m: MatchStats, before: Profile, xpAtStart: number, now: nu
   const base = lines.reduce((sum, l) => sum + l.xp, 0);
   const rivalBonus = Math.round(base * 0.15 * Math.max(0, m.opponents - 1));
   add(`Rival bonus (${m.opponents} rivals)`, rivalBonus);
+  for (const x of options.extra ?? []) add(x.label, x.xp);
+  const extraXp = (options.extra ?? []).reduce((sum, x) => sum + Math.max(0, x.xp), 0);
 
   let profile: Profile = {
     ...before,
-    xp: before.xp + base + rivalBonus,
+    xp: before.xp + base + rivalBonus + extraXp,
     games: before.games + 1,
     wins: before.wins + (m.won ? 1 : 0),
     kos: before.kos + m.kos,
@@ -376,9 +497,47 @@ export function award(m: MatchStats, before: Profile, xpAtStart: number, now: nu
 
   const levelBefore = levelInfo(xpAtStart).level;
   const levelAfter = levelInfo(profile.xp).level;
+  const total = profile.xp - xpAtStart;
+
+  // Card uses and foils.
+  const cardUses = { ...profile.cardUses };
+  for (const [k, n] of Object.entries(m.cardUses)) cardUses[k as CardKind] = (cardUses[k as CardKind] ?? 0) + (n ?? 0);
+  const newFoils = (Object.keys(cardUses) as CardKind[]).filter((k) => !hasFoil(profile, k) && hasFoil({ ...profile, cardUses }, k));
+
+  // Season track: a new month starts a new season.
+  const sid = seasonId(now);
+  const seasonXpBefore = profile.season.id === sid ? profile.season.xp : 0;
+  const seasonBefore = seasonTier(seasonXpBefore);
+  const seasonAfter = seasonTier(seasonXpBefore + total);
+  const seasonRewards = SEASON_REWARDS.filter((r) => r.tier > seasonBefore && r.tier <= seasonAfter).map(seasonRewardItem);
+  const owned = [...new Set([...profile.owned, ...seasonRewards.map((u) => u.id)])];
+
+  const record: MatchRecord = {
+    at: now,
+    mode: options.mode ?? 'quick',
+    opponents: m.opponents,
+    placement: m.placement,
+    won: m.won,
+    damage: m.damageDealt,
+    taken: m.damageTaken,
+    kos: m.kos,
+    turns: m.myTurns,
+    xp: total,
+  };
+  profile = {
+    ...profile,
+    cardUses,
+    season: { id: sid, xp: seasonXpBefore + total },
+    owned,
+    history: [...profile.history, record].slice(-HISTORY_LIMIT),
+  };
   return {
+    seasonBefore,
+    seasonAfter,
+    seasonRewards,
+    newFoils,
     lines,
-    total: profile.xp - xpAtStart,
+    total,
     achievements: earned,
     xpBefore: xpAtStart,
     xpAfter: profile.xp,

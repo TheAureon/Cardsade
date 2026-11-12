@@ -18,7 +18,8 @@ export type CutsceneSpec =
   | { kind: 'guard'; who: Fighter }
   | { kind: 'ko'; who: Fighter }
   | { kind: 'showdown'; a: Fighter; b: Fighter }
-  | { kind: 'victory'; winner: Fighter; mine: boolean };
+  | { kind: 'victory'; winner: Fighter; mine: boolean }
+  | { kind: 'ultimate'; who: Fighter; name: string; target: Fighter | null };
 
 /** How long each scene runs. The game holds bots and effects for this long. */
 export const CUTSCENE_MS: Record<CutsceneSpec['kind'], number> = {
@@ -29,6 +30,7 @@ export const CUTSCENE_MS: Record<CutsceneSpec['kind'], number> = {
   ko: 2300,
   showdown: 2600,
   victory: 3000,
+  ultimate: 1900,
 };
 
 const ELEMENTS = ['RADIANT', 'IRONCLAD', 'SHADOW', 'ROYAL', 'GLACIAL', 'TEMPEST'];
@@ -70,6 +72,7 @@ export function Cutscene({ spec, onDone }: { spec: CutsceneSpec; onDone: () => v
       ko: [[0, () => sfx.impact()], [500, () => sfx.ko()]],
       showdown: [[0, () => sfx.cutIn()], [600, () => sfx.thunder()], [1300, () => sfx.impact()]],
       victory: [[0, () => sfx.impact()], [300, () => (spec.kind === 'victory' && !spec.mine ? sfx.lose() : sfx.yourTurn())]],
+      ultimate: [[0, () => sfx.cutIn()], [700, () => sfx.reaction(true)], [1150, () => sfx.impact()]],
     }[spec.kind] as [number, () => void][];
     const timers = cues.map(([at, fn]) => setTimeout(fn, at));
     timers.push(setTimeout(() => done.current(), ms));
@@ -119,6 +122,8 @@ function label(spec: CutsceneSpec): string {
       return `Final showdown: ${spec.a.name} versus ${spec.b.name}`;
     case 'victory':
       return spec.mine ? 'Victory' : `Defeat: ${spec.winner.name} wins`;
+    case 'ultimate':
+      return `${spec.who.name} unleashes ${spec.name}`;
   }
 }
 
@@ -224,6 +229,21 @@ function Scene({ spec }: { spec: CutsceneSpec }) {
             Final showdown
           </Title>
           <Impact at={1300} />
+        </>
+      );
+
+    case 'ultimate':
+      return (
+        <>
+          <div className="cs-focus" />
+          <Band fighter={spec.who} mood="intense" from="right" slot={spec.target ? 'upper' : 'middle'}>
+            <span className="cs-tag">奥義</span>
+            <span className="cs-move">{spec.name}</span>
+          </Band>
+          {spec.target && <Band fighter={spec.target} mood="shock" from="left" slot="lower" delay={700} />}
+          <Impact at={1150}>
+            <span className="cs-damage cs-ult-word">Ultimate!</span>
+          </Impact>
         </>
       );
 
