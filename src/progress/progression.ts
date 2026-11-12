@@ -116,6 +116,8 @@ export function newProfile(): Profile {
 
 export interface MatchStats {
   me: PlayerId;
+  /** Your team, if any: a teammate's win is your win. */
+  team: number | null;
   opponents: number;
   damageDealt: number;
   damageTaken: number;
@@ -144,9 +146,10 @@ export interface MatchStats {
   discardTarget: PlayerId | null;
 }
 
-export function newMatch(me: PlayerId, opponents: number, startHp: number): MatchStats {
+export function newMatch(me: PlayerId, opponents: number, startHp: number, team: number | null = null): MatchStats {
   return {
     me,
+    team,
     opponents,
     damageDealt: 0,
     damageTaken: 0,
@@ -238,7 +241,7 @@ export function track(stats: MatchStats, e: FxEvent, ctx: TrackContext = {}): Ma
       if (e.who === me) s.myTurns++;
       break;
     case 'win':
-      s.won = e.who === me;
+      s.won = e.who === me || (s.team !== null && e.team === s.team);
       if (s.won) s.placement = 1;
       break;
   }

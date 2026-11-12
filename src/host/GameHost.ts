@@ -1,6 +1,16 @@
 import { decideBot } from '../engine/bot';
-import { applyAction, getPending, getPlayerView } from '../engine/engine';
-import type { Action, GameState, PlayerId, PlayerView } from '../engine/types';
+import { applyAction, getPending, getPlayerView, type SeatSetup } from '../engine/engine';
+import type { Action, GameConfig, GameState, PlayerId, PlayerView } from '../engine/types';
+
+/**
+ * Everything needed to rebuild a game exactly: the engine is deterministic,
+ * so the setup plus the list of actions replays it move for move.
+ */
+export interface Recording {
+  seats: SeatSetup[];
+  config: GameConfig;
+  actions: Action[];
+}
 
 /**
  * What a UI talks to. A local game uses LocalClient; a networked game would
@@ -29,13 +39,21 @@ export class GameHost {
   private botTimer: ReturnType<typeof setTimeout> | null = null;
   private views = new Map<PlayerId, PlayerView>();
   private holdUntil = 0;
+  private actions: Action[] = [];
+  private setup: { seats: SeatSetup[]; config: GameConfig } | null = null;
 
   constructor(
     initial: GameState,
-    private options: { botDelayMs: number } = { botDelayMs: 900 },
+    private options: { botDelayMs: number; seats?: SeatSetup[] } = { botDelayMs: 900 },
   ) {
     this.state = initial;
+    if (options.seats) this.setup = { seats: options.seats, config: initial.config };
     this.scheduleBot();
+  }
+
+  /** The game so far as a replayable recording (needs `seats` passed to the constructor). */
+  recording(): Recording | null {
+    return this.setup ? { ...this.setup, actions: this.actions.slice() } : null;
   }
 
   getState(): GameState {
@@ -56,6 +74,7 @@ export class GameHost {
     const result = applyAction(this.state, action);
     if (!result.ok) return result;
     this.state = result.state;
+    this.actions.push(action);
     this.views.clear();
     this.listeners.forEach((l) => l());
     this.scheduleBot();

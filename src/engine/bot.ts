@@ -1,5 +1,6 @@
-import { packetDamage } from './engine';
-import { isActionCard } from './cards';
+import { ultimateFor } from './abilities';
+import { allies, packetDamage } from './engine';
+import { ELEMENT_KINDS, isActionCard } from './cards';
 import type { Action, Card, Packet, PlayerView, PublicPlayer } from './types';
 
 /**
@@ -28,13 +29,24 @@ export function decideBot(view: PlayerView, random: () => number = Math.random):
       return hand.length <= 10 ? { type: 'draw', player: me } : { type: 'endTurn', player: me };
 
     case 'main': {
-      const opponents = view.players.filter((p) => p.id !== me && !p.eliminated);
+      const self = view.players.find((p) => p.id === me)!;
+      const opponents = view.players.filter((p) => p.id !== me && !p.eliminated && !allies(p, self));
       const target = pickTarget(opponents, random);
+      const silenced = view.event?.kind === 'silence';
+
+      // A charged ultimate goes off straight away.
+      if (view.config.ultimates && self.charge >= 100) {
+        const ult = ultimateFor(self.fighter);
+        const weakest = opponents.slice().sort((a, b) => a.hp - b.hp)[0];
+        const richestFoe = opponents.slice().sort((a, b) => b.handCount - a.handCount)[0];
+        const aim = ult.kind === 'ambush' ? richestFoe : weakest;
+        return { type: 'ultimate', player: me, target: ult.targeted ? aim.id : undefined };
+      }
 
       // Strip a card-rich opponent first, sometimes.
       const discards = hand.filter((c) => c.kind.startsWith('discard'));
       const richest = opponents.slice().sort((a, b) => b.handCount - a.handCount)[0];
-      if (discards.length && richest.handCount >= 5 && random() < 0.6) {
+      if (!silenced && discards.length && richest.handCount >= 5 && random() < 0.6) {
         return { type: 'playAction', player: me, cardId: discards[0].id, target: richest.id };
       }
 
@@ -44,14 +56,16 @@ export function decideBot(view: PlayerView, random: () => number = Math.random):
       const sum = view.config.baseDamage + chosen.reduce((s, c) => s + c.value, 0);
       const useMults = mults.length && (sum >= 8 || sum * mults[0].value >= target.hp) ? mults.slice(0, 2) : [];
       const total = sum * useMults.reduce((m, c) => m * c.value, 1);
+      // Elements ride along on anything worth landing.
+      const elements = total >= 6 ? hand.filter((c) => ELEMENT_KINDS.includes(c.kind)).slice(0, 2) : [];
 
       // Skip the target before a big hit so their Reverse is wasted.
       const skip = find('skip');
-      if (skip && !target.skipped && total >= 15 && random() < 0.7) {
+      if (!silenced && skip && !target.skipped && total >= 15 && random() < 0.7) {
         return { type: 'playAction', player: me, cardId: skip.id, target: target.id };
       }
 
-      return { type: 'attack', player: me, target: target.id, cardIds: [...chosen, ...useMults].map((c) => c.id) };
+      return { type: 'attack', player: me, target: target.id, cardIds: [...chosen, ...useMults, ...elements].map((c) => c.id) };
     }
 
     case 'gameOver':
@@ -67,7 +81,7 @@ function pickTarget(opponents: PublicPlayer[], random: () => number): PublicPlay
 function respond(view: PlayerView, packet: Packet, random: () => number): Action {
   const me = view.viewer;
   const hand = view.hand;
-  const reverse = hand.find((c) => c.kind === 'reverse');
+  const reverse = view.event?.kind === 'noReverse' ? undefined : hand.find((c) => c.kind === 'reverse');
   const block = hand.find((c) => c.kind === 'block');
   const skip = hand.find((c) => c.kind === 'skip');
   const pass: Action = { type: 'pass', player: me };

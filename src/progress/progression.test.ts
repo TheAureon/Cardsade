@@ -76,7 +76,7 @@ describe('match tracking', () => {
 
   it('records placement when knocked out and when winning', () => {
     expect(play([[{ type: 'ko', who: 'me', by: 'b1' }, { alive: 2 }]]).placement).toBe(3);
-    expect(play([[{ type: 'win', who: 'me' }]]).placement).toBe(1);
+    expect(play([[{ type: 'win', who: 'me', team: null }]]).placement).toBe(1);
   });
 });
 
@@ -97,7 +97,7 @@ describe('achievements and awards', () => {
         [{ type: 'turn', who: 'me' }],
         [{ type: 'damage', from: 'me', to: 'b1', amount: 100, hp: 0 }],
         [{ type: 'ko', who: 'b1', by: 'me' }, { alive: 1 }],
-        [{ type: 'win', who: 'me' }],
+        [{ type: 'win', who: 'me', team: null }],
       ],
       1,
     );

@@ -75,7 +75,35 @@ export const CARD_INFO: Record<CardKind, CardInfo> = {
     reversible: true,
     blockable: true,
   },
+  fire: {
+    name: 'Fire',
+    symbol: '♨',
+    description: 'Add-on: if the attack lands, the target burns for 3 damage at the start of each of their next 3 turns.',
+    reversible: false,
+    blockable: true,
+  },
+  ice: {
+    name: 'Ice',
+    symbol: '❄',
+    description: 'Add-on: if the attack lands, the target is frozen and loses their attack next turn.',
+    reversible: false,
+    blockable: true,
+  },
+  lightning: {
+    name: 'Lightning',
+    symbol: 'ϟ',
+    description: 'Add-on: if the attack lands, half its damage chains to another enemy.',
+    reversible: false,
+    blockable: true,
+  },
 };
+
+export const ELEMENT_KINDS: CardKind[] = ['fire', 'ice', 'lightning'];
+
+/** Cards that ride on an attack: numbers, multipliers and elements. */
+export function isAttackCard(card: Card): boolean {
+  return card.kind === 'number' || card.kind === 'multiplier' || ELEMENT_KINDS.includes(card.kind);
+}
 
 /** Cards you can play on your own turn to start a chain against someone. */
 export const INITIATOR_KINDS: CardKind[] = ['skip', 'discard', 'discardAction', 'discardAttack', 'discardMultipliers'];
@@ -84,7 +112,7 @@ export const INITIATOR_KINDS: CardKind[] = ['skip', 'discard', 'discardAction', 
 export const RESPONSE_KINDS: CardKind[] = ['block', 'reverse', 'skip'];
 
 export function isActionCard(card: Card): boolean {
-  return card.kind !== 'number' && card.kind !== 'multiplier';
+  return !isAttackCard(card);
 }
 
 export function cardLabel(card: Card): string {
@@ -94,7 +122,7 @@ export function cardLabel(card: Card): string {
 }
 
 /** The shared deck. Big enough to deal 7 cards to 6 players with plenty left to draw. */
-export function buildDeck(): Card[] {
+export function buildDeck(options: { elements?: boolean } = {}): Card[] {
   const cards: Card[] = [];
   let n = 0;
   const add = (kind: CardKind, value: number, copies: number) => {
@@ -110,5 +138,10 @@ export function buildDeck(): Card[] {
   add('discardAction', 0, 2);
   add('discardAttack', 0, 2);
   add('discardMultipliers', 0, 2);
+  if (options.elements) {
+    add('fire', 0, 3);
+    add('ice', 0, 3);
+    add('lightning', 0, 3);
+  }
   return cards;
 }

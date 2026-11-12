@@ -9,7 +9,17 @@ export type CardKind =
   | 'discard'
   | 'discardAction'
   | 'discardAttack'
-  | 'discardMultipliers';
+  | 'discardMultipliers'
+  | ElementKind;
+
+/** Elemental add-ons ride on an attack like multipliers and trigger when it lands. */
+export type ElementKind = 'fire' | 'ice' | 'lightning';
+
+/** Each fighter's ultimate, chosen by their portrait (fighter index). */
+export type UltimateKind = 'crusade' | 'bulwark' | 'hexstorm' | 'decree' | 'souldrain' | 'ambush';
+
+/** Wild events: a random rule for one lap of the table, or an instant twist. */
+export type WildEventKind = 'double' | 'noReverse' | 'silence' | 'frenzy' | 'cardRain' | 'spring' | 'chaos';
 
 export interface Card {
   id: string;
@@ -30,6 +40,23 @@ export interface PlayerState {
   eliminated: boolean;
   /** Hit by Skip: the next play this player makes is nullified. */
   skipped: boolean;
+  /** Which character this seat plays (portrait and ultimate). */
+  fighter: number;
+  /** Players on the same team can't target each other and win together. */
+  team: number | null;
+  maxHp: number;
+  /** Ultimate meter, 0–100. */
+  charge: number;
+  /** Turns of burn left (3 damage at the start of each). */
+  burn: number;
+  burnBy: PlayerId | null;
+  /** Frozen: loses the attack on their next turn. */
+  frozen: boolean;
+  /** Attacks that will be blocked automatically. */
+  shield: number;
+  boss: boolean;
+  /** Turns this player has started. */
+  turns: number;
 }
 
 export type PacketKind = 'attack' | 'skip' | 'discard' | 'discardAction' | 'discardAttack' | 'discardMultipliers';
@@ -51,6 +78,8 @@ export interface Packet {
   numbers: number;
   /** Product of multiplier cards (attacks only). */
   multiplier: number;
+  /** Elements riding on an attack. */
+  elements: ElementKind[];
 }
 
 export interface GameConfig {
@@ -59,6 +88,12 @@ export interface GameConfig {
   drawCount: number;
   baseDamage: number;
   seed: number;
+  /** Fire, Ice and Lightning cards in the deck. */
+  elements: boolean;
+  /** Ultimate meters and abilities. */
+  ultimates: boolean;
+  /** Random rule changes every few turns. */
+  wildEvents: boolean;
 }
 
 export interface TurnState {
@@ -87,7 +122,17 @@ export type FxEvent =
   | { type: 'discard'; who: PlayerId; count: number }
   | { type: 'draw'; who: PlayerId; count: number }
   | { type: 'ko'; who: PlayerId; by: PlayerId }
-  | { type: 'win'; who: PlayerId };
+  | { type: 'win'; who: PlayerId; team: number | null }
+  | { type: 'burn'; who: PlayerId; by: PlayerId }
+  | { type: 'freeze'; who: PlayerId }
+  | { type: 'frozen'; who: PlayerId }
+  | { type: 'chain'; from: PlayerId; to: PlayerId; amount: number }
+  | { type: 'ultimate'; who: PlayerId; kind: UltimateKind; target: PlayerId | null }
+  | { type: 'heal'; who: PlayerId; amount: number; hp: number }
+  | { type: 'steal'; from: PlayerId; to: PlayerId; count: number }
+  | { type: 'shielded'; who: PlayerId; against: PlayerId }
+  | { type: 'rage'; who: PlayerId }
+  | { type: 'event'; kind: WildEventKind; active: boolean };
 
 export interface LogEntry {
   id: number;
@@ -109,6 +154,13 @@ export interface GameState {
   log: LogEntry[];
   rng: number;
   nextId: number;
+  /** The wild event in force, if any, until the given turn number. */
+  event: ActiveEvent | null;
+}
+
+export interface ActiveEvent {
+  kind: WildEventKind;
+  untilTurn: number;
 }
 
 export type Action =
@@ -118,7 +170,8 @@ export type Action =
   | { type: 'pass'; player: PlayerId }
   | { type: 'chooseDiscard'; player: PlayerId; cardId: string }
   | { type: 'draw'; player: PlayerId }
-  | { type: 'endTurn'; player: PlayerId };
+  | { type: 'endTurn'; player: PlayerId }
+  | { type: 'ultimate'; player: PlayerId; target?: PlayerId };
 
 /** Whose decision the game is waiting on, and what kind. */
 export type Pending =
@@ -156,4 +209,5 @@ export interface PlayerView {
   revealedHand: Card[] | null;
   winner: PlayerId | null;
   log: LogEntry[];
+  event: ActiveEvent | null;
 }
