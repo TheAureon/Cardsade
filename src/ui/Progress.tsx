@@ -1,5 +1,6 @@
 /** Progression UI: achievement medallions, the level shield, the XP bar and the results panel. */
 import { useEffect, useState, type CSSProperties } from 'react';
+import { CARD_INFO } from '../engine/cards';
 import { levelInfo, ordinal, type Achievement, type Award } from '../progress/progression';
 
 const TIER_FILL: Record<Achievement['tier'], [string, string, string]> = {
@@ -172,6 +173,28 @@ export function Results({
                   <Badge achievement={a} size={60} />
                   <span>{a.name}</span>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="results-season">
+          Season tier {award.seasonBefore} → <b>{award.seasonAfter}</b> / 30
+        </div>
+
+        {(award.seasonRewards.length > 0 || award.newFoils.length > 0) && (
+          <div className="results-section">
+            <h3>Rewards</h3>
+            <div className="unlock-chips">
+              {award.seasonRewards.map((u) => (
+                <span key={u.id} className="unlock-chip got">
+                  Season reward: <b>{u.name}</b>
+                </span>
+              ))}
+              {award.newFoils.map((k) => (
+                <span key={k} className="unlock-chip got">
+                  New foil: <b>{CARD_INFO[k].name}</b>
+                </span>
               ))}
             </div>
           </div>
