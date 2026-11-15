@@ -94,6 +94,28 @@ Progress is saved in your browser (`src/progress/progression.ts` holds the rules
   - Table themes: Crimson, Emerald (4), Midnight (7), Royal (10), Gold (15).
   - Card backs: Classic, Shadow (6), Gilded (9), Ocean (14).
 
+## Modes
+
+Pick a mode from **Play**:
+
+- **Quick Battle:** you against 1–5 bots, free-for-all or in teams (2v2 or 3v3 with 3 or 5 rivals). Elements, ultimates and wild events can each be turned on or off.
+- **Crusade:** six story chapters against the cast, each with its own rules and an intro scene. Clearing a chapter unlocks the next and pays bonus XP.
+- **Daily challenge:** a seeded match that is the same for everyone that day, scored on result, HP left, speed and damage. Your first run each day pays +75 XP.
+- **Boss battles:** you and two allies against a 320 HP boss with 10 cards, who goes into a rage every third turn.
+- **Pass & Play:** 2–4 people on one device, plus bots. A curtain hides the screen between turns so no one sees another hand.
+- **Tutorial:** a short coached match against a training dummy.
+
+## Extra mechanics
+
+- **Elemental cards** ride along on an attack: **Fire** burns for 3 damage at the start of each of the target's next 3 turns, **Ice** freezes them so they lose their attack next turn, and **Lightning** chains half the damage to another enemy.
+- **Ultimate meter:** dealing and taking damage charges it. When full, each fighter has a unique ultimate: Holy Crusade (25 unblockable), Bulwark (2 automatic blocks), Hex Storm (each enemy discards 2), Royal Decree (heal 30), Soul Drain (20 damage and heal 20) and Ambush (steal 2 cards).
+- **Wild events:** every 5 turns a random event shakes up the table for a round: Double Damage, Mirror Ban, Silence, Frenzy, Card Rain, Healing Spring or Chaos Shuffle.
+- **Teams:** you can't target allies, and a team wins when all its rivals are out.
+- **Emotes:** tap Emote to taunt, and bots answer back.
+- **Card foils:** play a card type 15 times to earn its holographic foil.
+- **Seasons:** each month is a new 30-tier season fed by your XP, with exclusive titles, tables and card backs to keep.
+- **Stats and replays:** the Stats screen charts your last 20 games, lists your favourite cards and keeps your last 10 matches as replays you can watch at ½× to 4× speed. Replays are exact because the engine is deterministic: a recording is just the seats, the config and the actions.
+
 ## Architecture (built for multiplayer)
 
 ```

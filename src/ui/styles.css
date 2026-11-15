@@ -4333,21 +4333,20 @@ summary:focus-visible {
 }
 .replay-bar {
   position: fixed;
-  left: 50%;
-  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  right: 16px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   z-index: 40;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  max-width: calc(100vw - 32px);
   padding: 8px 12px;
   color: var(--paper);
   background: rgba(10, 0, 2, 0.88);
   border: 3px solid var(--gold);
   border-radius: 14px;
-  transform: translateX(-50%);
+  max-width: min(340px, calc(100vw - 32px));
 }
 .replay-bar b {
   font-family: var(--display);
@@ -4739,5 +4738,14 @@ summary:focus-visible {
   }
   .emote-picker {
     grid-template-columns: repeat(2, auto);
+  }
+}
+
+@media (max-width: 760px) {
+  .replay-bar {
+    top: 54px;
+    bottom: auto;
+    right: 50%;
+    transform: translateX(50%);
   }
 }

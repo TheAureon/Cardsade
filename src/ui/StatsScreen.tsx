@@ -150,7 +150,7 @@ function BarChart({ title, unit, data }: { title: string; unit: string; data: { 
   const W = 640;
   const H = 180;
   const pad = { l: 40, r: 8, t: 10, b: 22 };
-  const max = niceMax(Math.max(1, ...data.map((d) => d.value)));
+  const max = niceMax(Math.max(2, ...data.map((d) => d.value)));
   const ticks = [0, max / 2, max];
   const iw = W - pad.l - pad.r;
   const ih = H - pad.t - pad.b;
